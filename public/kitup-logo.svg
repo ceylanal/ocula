@@ -1,0 +1,14 @@
+<svg width="512" height="512" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="kitup-bg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="55%" stop-color="#7C3AED" />
+      <stop offset="100%" stop-color="#581C87" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#kitup-bg)" />
+  <path d="M6 22.5L16 17.5L26 22.5" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.65" />
+  <path d="M6 16.5L16 9.5L26 16.5" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M16 12V24" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.85" />
+  <circle cx="16" cy="6.2" r="2.3" fill="#FB7185" />
+</svg>

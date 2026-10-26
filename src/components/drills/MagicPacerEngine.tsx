@@ -1,0 +1,452 @@
+"use client";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Gauge,
+  EyeOff,
+  Sparkles,
+  CheckCircle2,
+  SkipBack,
+  SkipForward,
+} from "lucide-react";
+import { tokenizeParagraphs } from "@/lib/textUtils";
+
+interface MagicPacerEngineProps {
+  paragraphs: string[];
+  initialWordIndex?: number;
+  initialWpm?: number;
+  fontClass?: string;
+  fontSize?: number;
+  lineHeight?: number;
+  onWordIndexChange?: (index: number, wpm: number) => void;
+  onFinishSession?: (stats: {
+    wpm: number;
+    durationSeconds: number;
+    wordsRead: number;
+  }) => void;
+}
+
+type MaskIntensity = "soft" | "blur" | "strict";
+
+export function MagicPacerEngine({
+  paragraphs,
+  initialWordIndex = 0,
+  initialWpm = 320,
+  fontClass = "font-sans",
+  fontSize = 19,
+  lineHeight = 1.9,
+  onWordIndexChange,
+  onFinishSession,
+}: MagicPacerEngineProps) {
+  const { words, paragraphsOfWords } = useMemo(
+    () => tokenizeParagraphs(paragraphs),
+    [paragraphs]
+  );
+  const totalWords = words.length;
+
+  const [currentIndex, setCurrentIndex] = useState(
+    Math.min(initialWordIndex, Math.max(0, totalWords - 1))
+  );
+  const [wpm, setWpm] = useState(initialWpm);
+  const [spanSize, setSpanSize] = useState<1 | 3 | 5>(3);
+  const [maskMode, setMaskMode] = useState<MaskIntensity>("blur");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [completed, setCompleted] = useState(false);
+
+  const activeWordElRef = useRef<HTMLSpanElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const sessionStartRef = useRef<number | null>(null);
+  const accumulatedSecondsRef = useRef<number>(0);
+
+  // Sync external initialWpm when updated from URL or parent
+  useEffect(() => {
+    if (initialWpm && initialWpm >= 100 && initialWpm <= 1000) {
+      setWpm(initialWpm);
+    }
+  }, [initialWpm]);
+
+  // Reset only when the actual text/book changes
+  useEffect(() => {
+    setCurrentIndex(Math.min(initialWordIndex, Math.max(0, totalWords - 1)));
+    setIsPlaying(false);
+    setCompleted(false);
+  }, [paragraphs, totalWords]);
+
+  // Allow jumping to a bookmark/note word index when paused
+  useEffect(() => {
+    if (!isPlaying) {
+      setCurrentIndex(Math.min(initialWordIndex, Math.max(0, totalWords - 1)));
+    }
+  }, [initialWordIndex, totalWords]);
+
+  useEffect(() => {
+    onWordIndexChange?.(currentIndex, wpm);
+  }, [currentIndex, wpm]);
+
+  // Accurate auto-scroll using getBoundingClientRect relative to scroll container
+  useEffect(() => {
+    if (!activeWordElRef.current || !containerRef.current) return;
+    const container = containerRef.current;
+    const el = activeWordElRef.current;
+
+    const containerRect = container.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const relativeTop = elRect.top - containerRect.top;
+
+    // Scroll smoothly only when the active line approaches top/bottom thresholds
+    if (
+      relativeTop < container.clientHeight * 0.2 ||
+      relativeTop > container.clientHeight * 0.65
+    ) {
+      const targetScrollTop =
+        container.scrollTop + relativeTop - container.clientHeight * 0.35;
+      container.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: "smooth",
+      });
+    }
+  }, [currentIndex]);
+
+  // Timer loop for Magic Pacer progression
+  useEffect(() => {
+    if (!isPlaying || totalWords === 0) {
+      if (sessionStartRef.current) {
+        accumulatedSecondsRef.current +=
+          (Date.now() - sessionStartRef.current) / 1000;
+        sessionStartRef.current = null;
+      }
+      return;
+    }
+
+    if (!sessionStartRef.current) {
+      sessionStartRef.current = Date.now();
+    }
+
+    const intervalMs = Math.max(55, Math.round((60000 / wpm) * spanSize));
+
+    const timer = setInterval(() => {
+      setCurrentIndex((prev) => {
+        const next = prev + spanSize;
+        if (next >= totalWords) {
+          setIsPlaying(false);
+          setCompleted(true);
+          const extraSec = sessionStartRef.current
+            ? (Date.now() - sessionStartRef.current) / 1000
+            : 0;
+          sessionStartRef.current = null;
+          onFinishSession?.({
+            wpm,
+            durationSeconds: Math.max(
+              3,
+              Math.round(accumulatedSecondsRef.current + extraSec)
+            ),
+            wordsRead: totalWords,
+          });
+          return totalWords - 1;
+        }
+        return next;
+      });
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [isPlaying, wpm, spanSize, totalWords, onFinishSession]);
+
+  // Keyboard shortcuts (Space to play/pause, arrows for WPM & seek)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+      if (e.code === "Space") {
+        e.preventDefault();
+        setIsPlaying((p) => !p);
+      } else if (e.code === "ArrowRight") {
+        e.preventDefault();
+        setCurrentIndex((i) => Math.min(totalWords - 1, i + spanSize));
+      } else if (e.code === "ArrowLeft") {
+        e.preventDefault();
+        setCurrentIndex((i) => Math.max(0, i - spanSize));
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [spanSize, totalWords]);
+
+  const activeParagraphIndex = words[currentIndex]?.paragraphIndex ?? 0;
+  const progressPercent =
+    totalWords > 1 ? Math.round((currentIndex / (totalWords - 1)) * 100) : 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Control Bar */}
+      <div className="p-4 rounded-2xl bg-surface border border-border flex flex-wrap items-center justify-between gap-4">
+        {/* WPM Control */}
+        <div className="flex items-center gap-3 flex-1 min-w-[240px]">
+          <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+            <Gauge className="w-4 h-4" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-muted font-medium">Pacer Hızı</span>
+              <span className="font-bold text-indigo-400">{wpm} WPM</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setWpm((w) => Math.max(100, w - 25))}
+                className="px-2 py-0.5 text-xs rounded bg-surface-elevated border border-border hover:border-indigo-500/40"
+              >
+                -25
+              </button>
+              <input
+                type="range"
+                min={100}
+                max={1000}
+                step={10}
+                value={wpm}
+                onChange={(e) => setWpm(Number(e.target.value))}
+                className="w-full accent-indigo-500 cursor-pointer h-1.5 rounded-lg"
+              />
+              <button
+                onClick={() => setWpm((w) => Math.min(1000, w + 25))}
+                className="px-2 py-0.5 text-xs rounded bg-surface-elevated border border-border hover:border-indigo-500/40"
+              >
+                +25
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Focus Block Width */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted">Odak Bloğu:</span>
+          <div className="flex rounded-xl bg-surface-elevated p-1 border border-border">
+            {([1, 3, 5] as const).map((sz) => (
+              <button
+                key={sz}
+                onClick={() => setSpanSize(sz)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  spanSize === sz
+                    ? "bg-indigo-600 text-white"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                {sz} Kelime
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Blur / Masking Mode */}
+        <div className="flex items-center gap-2">
+          <EyeOff className="w-3.5 h-3.5 text-muted" />
+          <div className="flex rounded-xl bg-surface-elevated p-1 border border-border">
+            {(
+              [
+                { id: "soft", label: "Hafif" },
+                { id: "blur", label: "Bulanık (Blur)" },
+                { id: "strict", label: "Tam Maske" },
+              ] as const
+            ).map((m) => (
+              <button
+                key={m.id}
+                onClick={() => setMaskMode(m.id)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  maskMode === m.id
+                    ? "bg-indigo-600 text-white"
+                    : "text-muted hover:text-foreground"
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Transport Controls: Reset / Back / Play-Pause / Forward */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              setIsPlaying(false);
+              setCurrentIndex(0);
+              setCompleted(false);
+              containerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="p-2.5 rounded-xl bg-surface-elevated border border-border text-muted hover:text-foreground transition-colors"
+            title="Başa Dön"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() =>
+              setCurrentIndex((i) => Math.max(0, i - spanSize * 2))
+            }
+            className="p-2.5 rounded-xl bg-surface-elevated border border-border text-muted hover:text-foreground transition-colors"
+            title="Geri Al"
+          >
+            <SkipBack className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              if (currentIndex >= totalWords - 1) setCurrentIndex(0);
+              setCompleted(false);
+              setIsPlaying((p) => !p);
+            }}
+            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
+          >
+            {isPlaying ? (
+              <>
+                <Pause className="w-4 h-4 fill-current" />
+                <span>Duraklat</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4 fill-current" />
+                <span>Pacer Başlat</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={() =>
+              setCurrentIndex((i) =>
+                Math.min(totalWords - 1, i + spanSize * 2)
+              )
+            }
+            className="p-2.5 rounded-xl bg-surface-elevated border border-border text-muted hover:text-foreground transition-colors"
+            title="İleri Al"
+          >
+            <SkipForward className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Full-Page Pacer Document Viewport */}
+      <div className="rounded-3xl bg-surface border-2 border-border overflow-hidden shadow-xl">
+        {/* Progress bar */}
+        <div className="h-1.5 w-full bg-surface-elevated">
+          <div
+            className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-150"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+
+        <div className="px-6 py-3 bg-surface-elevated/50 border-b border-border flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+          <span className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+            Herhangi bir kelimeye tıklayarak odak çerçevesini o noktaya
+            taşıyabilirsiniz (Boşluk tuşu: Başlat/Duraklat).
+          </span>
+          <span>
+            İlerleme:{" "}
+            <strong className="text-foreground">%{progressPercent}</strong> (
+            {currentIndex + 1}/{totalWords})
+          </span>
+        </div>
+
+        <div
+          ref={containerRef}
+          className={`max-h-[480px] overflow-y-auto p-6 sm:p-10 space-y-6 ${fontClass}`}
+          style={{
+            fontSize: `${fontSize}px`,
+            lineHeight: lineHeight,
+          }}
+        >
+          {paragraphsOfWords.map((paraWords, pIdx) => {
+            const isParaActive = pIdx === activeParagraphIndex;
+
+            // Paragraph-level masking (prevents per-word GPU blur glitches)
+            let paragraphStyleClass =
+              "transition-opacity duration-200 rounded-2xl p-3 -mx-3";
+            if (!isParaActive) {
+              if (maskMode === "strict") {
+                paragraphStyleClass +=
+                  " blur-[4px] opacity-15 select-none";
+              } else if (maskMode === "blur") {
+                paragraphStyleClass += " blur-[2px] opacity-30";
+              } else {
+                paragraphStyleClass += " opacity-45";
+              }
+            } else {
+              paragraphStyleClass +=
+                " opacity-100 bg-surface-elevated/35 border border-border/50";
+            }
+
+            return (
+              <p key={pIdx} className={paragraphStyleClass}>
+                {paraWords.map((token) => {
+                  const isFocused =
+                    token.globalIndex >= currentIndex &&
+                    token.globalIndex < currentIndex + spanSize;
+                  const isFirstFocused = token.globalIndex === currentIndex;
+                  const isPast = token.globalIndex < currentIndex;
+
+                  // Keep exact same font-weight and inline metrics so text NEVER reflows or shifts!
+                  let wordAppearance = "";
+                  if (isFocused) {
+                    wordAppearance =
+                      "bg-indigo-500/25 text-foreground shadow-[0_2px_0_0_#6366f1] ring-1 ring-indigo-500/40";
+                  } else if (isParaActive) {
+                    if (maskMode === "strict") {
+                      wordAppearance = isPast
+                        ? "opacity-20 blur-[1.5px]"
+                        : "opacity-25 blur-[1.5px]";
+                    } else if (maskMode === "blur") {
+                      wordAppearance = isPast ? "opacity-35" : "opacity-55";
+                    } else {
+                      wordAppearance = isPast ? "opacity-45" : "opacity-80";
+                    }
+                  }
+
+                  return (
+                    <React.Fragment key={token.globalIndex}>
+                      <span
+                        ref={isFirstFocused ? activeWordElRef : null}
+                        onClick={() => setCurrentIndex(token.globalIndex)}
+                        className={`rounded px-1 py-0.5 -mx-0.5 cursor-pointer transition-colors duration-75 ${wordAppearance}`}
+                      >
+                        {token.word}
+                      </span>{" "}
+                    </React.Fragment>
+                  );
+                })}
+              </p>
+            );
+          })}
+        </div>
+      </div>
+
+      {completed && (
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-6 h-6 text-emerald-500 shrink-0" />
+            <div>
+              <div className="font-semibold text-sm">
+                Magic Pacer Egzersizi Tamamlandı!
+              </div>
+              <div className="text-xs text-muted">
+                Geriye dönüş (regresyon) yapmadan{" "}
+                <strong className="text-emerald-400">{wpm} WPM</strong> hızında
+                tüm metni taradınız.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setCurrentIndex(0);
+              setCompleted(false);
+              containerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 transition-colors"
+          >
+            Başa Sar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
