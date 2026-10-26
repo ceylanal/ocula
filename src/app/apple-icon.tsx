@@ -18,7 +18,8 @@ export default function AppleIcon() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 60%, #581c87 100%)",
+          background:
+            "linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #3b0764 100%)",
           borderRadius: "40px",
           color: "white",
           fontFamily: "sans-serif",
@@ -26,22 +27,34 @@ export default function AppleIcon() {
       >
         <div
           style={{
-            width: "14px",
-            height: "14px",
-            borderRadius: "9999px",
-            background: "#fb7185",
-            marginBottom: "6px",
+            width: "84px",
+            height: "48px",
+            borderRadius: "999px",
+            border: "5px solid #a5b4fc",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: "10px",
           }}
-        />
+        >
+          <div
+            style={{
+              width: "20px",
+              height: "20px",
+              borderRadius: "999px",
+              background: "#f43f5e",
+            }}
+          />
+        </div>
         <div
           style={{
-            fontSize: "52px",
+            fontSize: "34px",
             fontWeight: 900,
-            letterSpacing: "-2px",
+            letterSpacing: "-1px",
             lineHeight: 1,
           }}
         >
-          KitUp
+          Ocula
         </div>
       </div>
     ),

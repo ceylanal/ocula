@@ -4,19 +4,19 @@
 
 :root,
 [data-theme="dark"] {
-  --bg-primary: #0b0f17;
-  --bg-surface: #131926;
-  --bg-elevated: #1c2436;
-  --text-primary: #f1f5f9;
+  --bg-primary: #070a12;
+  --bg-surface: #0e1422;
+  --bg-elevated: #161f33;
+  --text-primary: #f8fafc;
   --text-muted: #94a3b8;
-  --border-color: #243047;
+  --border-color: #1f2b45;
   --accent-color: #6366f1;
 }
 
 [data-theme="light"] {
-  --bg-primary: #f8fafc;
+  --bg-primary: #f4f6fb;
   --bg-surface: #ffffff;
-  --bg-elevated: #f1f5f9;
+  --bg-elevated: #edf1f9;
   --text-primary: #0f172a;
   --text-muted: #64748b;
   --border-color: #e2e8f0;
@@ -24,20 +24,45 @@
 }
 
 [data-theme="sepia"] {
-  --bg-primary: #f4ecd8;
-  --bg-surface: #fbf6e9;
-  --bg-elevated: #ede1c5;
-  --text-primary: #3c2f23;
-  --text-muted: #7b6651;
-  --border-color: #dccbb0;
+  --bg-primary: #f3ead6;
+  --bg-surface: #fcf7eb;
+  --bg-elevated: #ebe0c7;
+  --text-primary: #36291e;
+  --text-muted: #78634e;
+  --border-color: #dac8ab;
   --accent-color: #b45309;
 }
 
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-theme="dark"] body {
+  background-image: radial-gradient(
+      circle at 15% 0%,
+      rgba(99, 102, 241, 0.11),
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 85% 15%,
+      rgba(168, 85, 247, 0.08),
+      transparent 38%
+    );
+  background-attachment: fixed;
+}
+
+/* Subtle top specular highlight on surface cards in dark mode */
+[data-theme="dark"] .bg-surface {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Tabular numbers for timers & WPM readouts */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Custom subtle scrollbars */

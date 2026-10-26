@@ -13,23 +13,23 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#4f46e5",
+  themeColor: "#070a12",
 };
 
 export const metadata: Metadata = {
-  title: "KitUp — Hızlı Okuma, Görsel Algı ve Akıllı E-Kitap Kütüphanesi",
+  title: "Ocula — Göz Kasları, Görsel Algı ve Hızlı Okuma Sistemi",
   description:
-    "KitUp ile RSVP, Magic Pacer, Schulte 5x5 egzersizleriyle okuma hızınızı ikiye katlayın ve PDF/EPUB kitaplarınızı akıllı okuyucuyla her cihazda okuyun.",
-  applicationName: "KitUp",
+    "Latince Oculus kökünden ilham alan Ocula ile göz kaslarınızı, periferal algınızı ve okuma hızınızı eğitin. PDF/EPUB destekli akıllı okuyucu.",
+  applicationName: "Ocula",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "KitUp",
+    title: "Ocula",
   },
   openGraph: {
-    title: "KitUp — Hızlı Okuma ve Akıllı E-Kitap Kütüphanesi",
+    title: "Ocula — Göz Kasları, Görsel Algı ve Hızlı Okuma Sistemi",
     description:
-      "RSVP, Magic Pacer, Schulte 5x5 egzersizleri ve PDF/EPUB destekli Akıllı E-Kitap Okuyucu.",
+      "RSVP, Magic Pacer, Schulte 5x5 optik egzersizleri ve PDF/EPUB destekli Akıllı E-Kitap Kütüphanesi.",
     type: "website",
   },
 };

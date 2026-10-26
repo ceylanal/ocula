@@ -18,7 +18,7 @@ import {
   pullStateFromSupabase,
   pushStateToSupabase,
 } from "@/lib/supabase";
-import { KitUpLogo } from "./KitUpLogo";
+import { OculaLogo } from "./OculaLogo";
 
 const SUPABASE_SQL_SNIPPET = `create table if not exists public.users (
   id text primary key,
@@ -114,15 +114,15 @@ export function CloudSyncAndShareModal({
   const shareUrl =
     typeof window !== "undefined"
       ? window.location.origin
-      : "https://kitup.vercel.app";
+      : "https://ocula.vercel.app";
 
-  const shareText = `📚 KitUp ile okuma hızımı ${user.current_wpm} WPM (%${user.comprehension_rate} anlama oranı) seviyesine çıkardım! Hızlı okuma egzersizleri ve akıllı PDF/EPUB okuyucu için dene:`;
+  const shareText = `👁️ Ocula ile göz kaslarımı ve görsel algımı eğiterek okuma hızımı ${user.current_wpm} WPM (%${user.comprehension_rate} anlama oranı) seviyesine çıkardım! Sen de dene:`;
 
   const handleNativeShare = async () => {
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
-          title: "KitUp — Hızlı Okuma ve Akıllı Kütüphane",
+          title: "Ocula — Görsel Algı ve Hızlı Okuma Sistemi",
           text: shareText,
           url: shareUrl,
         });
@@ -198,7 +198,7 @@ export function CloudSyncAndShareModal({
       <div className="w-full max-w-xl rounded-3xl bg-surface border-2 border-border shadow-2xl overflow-hidden">
         {/* Modal Header */}
         <div className="p-5 border-b border-border flex items-center justify-between bg-surface-elevated/50">
-          <KitUpLogo
+          <OculaLogo
             size="sm"
             subtitle="Mobil Kurulum, Paylaşım & Supabase Bulut"
           />
@@ -245,13 +245,13 @@ export function CloudSyncAndShareModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-semibold text-indigo-400">
-                      Paylaşılabilir KitUp Kartı
+                      Paylaşılabilir Ocula Optik Kartı
                     </div>
                     <div className="text-xl font-extrabold mt-0.5">
                       {user.current_wpm} WPM • %{user.comprehension_rate} Anlama
                     </div>
                   </div>
-                  <KitUpLogo size="md" showText={false} />
+                  <OculaLogo size="md" showText={false} />
                 </div>
 
                 <p className="text-xs text-muted leading-relaxed bg-surface/80 p-3 rounded-xl border border-border">

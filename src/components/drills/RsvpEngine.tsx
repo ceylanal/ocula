@@ -278,8 +278,8 @@ export function RsvpEngine({
         )}
       </div>
 
-      {/* Main RSVP Focal Viewport */}
-      <div className="relative rounded-3xl bg-surface border-2 border-border overflow-hidden shadow-xl">
+      {/* Main Ocula RSVP Optical HUD Viewport */}
+      <div className="relative rounded-3xl bg-surface border-2 border-indigo-500/30 overflow-hidden shadow-2xl">
         {/* Top subtle progress bar */}
         <div className="h-1.5 w-full bg-surface-elevated">
           <div
@@ -288,16 +288,33 @@ export function RsvpEngine({
           />
         </div>
 
-        {/* Focal Reticle Guides */}
-        <div className="relative h-64 sm:h-72 flex flex-col items-center justify-center px-6 select-none">
-          {/* Horizontal guide bars */}
-          <div className="w-full max-w-lg border-t border-border/80 relative">
-            <div className="absolute left-1/2 -translate-x-1/2 -top-1 w-0.5 h-4 bg-rose-500/80" />
+        {/* Focal Reticle Guides & Optical Stage */}
+        <div className="relative h-68 sm:h-76 py-8 flex flex-col items-center justify-center px-6 select-none overflow-hidden">
+          {/* Ambient radial glow centered on the ORP fovea lock */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(244,63,94,0.07),rgba(99,102,241,0.04)_45%,transparent_70%)]" />
+
+          {/* Top HUD Telemetry Bar */}
+          <div className="absolute top-3 inset-x-6 flex items-center justify-between text-[11px] text-muted font-medium tabular-nums">
+            <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border text-indigo-400 font-semibold">
+              OCULA FOVEA LOCK • {wpm} WPM
+            </span>
+            <span>
+              GRUP: <strong className="text-foreground">{chunkSize} KELİME</strong>
+            </span>
+          </div>
+
+          {/* Top Horizontal Optical Reticle Bar with Tick Marks */}
+          <div className="w-full max-w-xl border-t border-border relative flex justify-between px-8">
+            <span className="w-px h-2 bg-border -top-1 relative" />
+            <span className="w-px h-2 bg-border -top-1 relative" />
+            <div className="absolute left-1/2 -translate-x-1/2 -top-1.5 w-0.5 h-5 bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
+            <span className="w-px h-2 bg-border -top-1 relative" />
+            <span className="w-px h-2 bg-border -top-1 relative" />
           </div>
 
           {/* Word Display Stage */}
           <div
-            className={`my-10 w-full flex items-center justify-center ${fontClass}`}
+            className={`my-11 w-full flex items-center justify-center relative z-10 ${fontClass}`}
           >
             {chunkSize === 1 ? (
               /* Single-word ORP precision alignment: keeps ORP red character locked at center */
@@ -305,7 +322,7 @@ export function RsvpEngine({
                 <span className="text-right text-foreground">
                   {orp.prefix}
                 </span>
-                <span className="text-rose-500 font-extrabold px-[1px] underline decoration-rose-500/40 decoration-2 underline-offset-8">
+                <span className="text-rose-500 font-extrabold px-[1px] drop-shadow-[0_0_12px_rgba(244,63,94,0.35)] underline decoration-rose-500/50 decoration-2 underline-offset-8">
                   {orp.orpChar}
                 </span>
                 <span className="text-left text-foreground">
@@ -316,7 +333,7 @@ export function RsvpEngine({
               /* Multi-word group display with ORP highlight */
               <div className="text-center text-2xl sm:text-4xl md:text-5xl font-bold tracking-wide px-4">
                 <span className="text-foreground">{orp.prefix}</span>
-                <span className="text-rose-500 font-extrabold">
+                <span className="text-rose-500 font-extrabold drop-shadow-[0_0_12px_rgba(244,63,94,0.35)]">
                   {orp.orpChar}
                 </span>
                 <span className="text-foreground">{orp.suffix}</span>
@@ -324,13 +341,17 @@ export function RsvpEngine({
             )}
           </div>
 
-          {/* Bottom guide bar */}
-          <div className="w-full max-w-lg border-b border-border/80 relative">
-            <div className="absolute left-1/2 -translate-x-1/2 -bottom-1 w-0.5 h-4 bg-rose-500/80" />
+          {/* Bottom Horizontal Optical Reticle Bar with Tick Marks */}
+          <div className="w-full max-w-xl border-b border-border relative flex justify-between px-8">
+            <span className="w-px h-2 bg-border -bottom-1 relative" />
+            <span className="w-px h-2 bg-border -bottom-1 relative" />
+            <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-0.5 h-5 bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
+            <span className="w-px h-2 bg-border -bottom-1 relative" />
+            <span className="w-px h-2 bg-border -bottom-1 relative" />
           </div>
 
           {/* Subtle status overlay */}
-          <div className="absolute bottom-3 inset-x-6 flex items-center justify-between text-xs text-muted">
+          <div className="absolute bottom-3 inset-x-6 flex items-center justify-between text-xs text-muted tabular-nums">
             <span>
               Kelime:{" "}
               <strong className="text-foreground">{currentIndex + 1}</strong> /{" "}
