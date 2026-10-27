@@ -16,11 +16,15 @@ import {
   Share2,
   Sparkles,
   Settings,
+  Users,
+  User,
 } from "lucide-react";
 import { useSupereadStore } from "@/store/useSupereadStore";
 import { ThemeMode } from "@/types";
 import { OculaLogo } from "./OculaLogo";
 import { CloudSyncAndShareModal } from "./CloudSyncAndShareModal";
+import { AuthProfileModal } from "./AuthProfileModal";
+import { getSupabaseClient, pushStateToSupabase } from "@/lib/supabase";
 
 const NAV_ITEMS = [
   {
@@ -32,8 +36,14 @@ const NAV_ITEMS = [
   {
     href: "/library",
     label: "Kitaplığım & PDF",
-    sublabel: "Smart Reader • Auto-Ramp",
+    sublabel: "Smart Reader • Paylaş & Keşfet",
     icon: BookOpen,
+  },
+  {
+    href: "/community",
+    label: "Okur Salonu",
+    sublabel: "İncelemeler • Alıntı Kartları",
+    icon: Users,
   },
   {
     href: "/drills",
@@ -77,10 +87,22 @@ const THEME_OPTIONS: {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { theme, setTheme, user, readerPrefs, updateReaderPrefs } =
-    useSupereadStore();
+  const {
+    theme,
+    setTheme,
+    isAuthenticated,
+    user,
+    books,
+    readingProgress,
+    exerciseLogs,
+    supabaseUrl,
+    supabaseAnonKey,
+    readerPrefs,
+    updateReaderPrefs,
+  } = useSupereadStore();
   const [mounted, setMounted] = useState(false);
   const [cloudModalOpen, setCloudModalOpen] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -94,6 +116,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       document.documentElement.setAttribute("data-theme", activeTheme);
     }
   }, [activeTheme, mounted]);
+
+  // Real-time background Supabase synchronization when books, currentWordIndex, or WPM change
+  useEffect(() => {
+    if (!mounted || !isAuthenticated) return;
+    const client = getSupabaseClient(supabaseUrl, supabaseAnonKey);
+    if (!client) return;
+    const timer = setTimeout(() => {
+      pushStateToSupabase(client, {
+        user,
+        books,
+        exerciseLogs,
+        readingProgress,
+      }).catch(() => {});
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, [
+    mounted,
+    isAuthenticated,
+    user.current_wpm,
+    books.length,
+    readingProgress,
+    supabaseUrl,
+    supabaseAnonKey,
+  ]);
 
   const currentWpm = mounted ? user.current_wpm : 340;
   const comprehension = mounted ? user.comprehension_rate : 85;
@@ -215,35 +261,44 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Cloud Sync / Mobile Share + Settings Button Footer */}
-        <div className="p-4 border-t border-border/80 space-y-2.5">
+        {/* Auth Profile + Cloud Sync / Mobile Share + Settings Button Footer */}
+        <div className="p-4 border-t border-border/80 space-y-2">
           <button
-            onClick={() => setCloudModalOpen(true)}
-            className="w-full py-2.5 px-3.5 rounded-xl bg-[#5C6B57]/15 hover:bg-[#5C6B57] text-[#5C6B57] hover:text-[#F6F1E7] border border-[#5C6B57]/30 text-xs font-semibold flex items-center justify-between transition-all shadow-sm"
+            onClick={() => setAuthModalOpen(true)}
+            className="w-full py-2.5 px-3.5 rounded-xl bg-[#B85D3B]/15 hover:bg-[#B85D3B] text-[#2C2520] hover:text-[#F6F1E7] border border-[#B85D3B]/35 text-xs font-semibold flex items-center justify-between transition-all shadow-sm group"
           >
-            <span className="flex items-center gap-2">
-              <Cloud className="w-4 h-4" />
-              <span>Telefona Kur &amp; Bulut</span>
+            <span className="flex items-center gap-2.5 min-w-0">
+              <span className="w-6 h-6 rounded-lg bg-[#B85D3B] text-[#F6F1E7] flex items-center justify-center text-[11px] font-bold shrink-0">
+                {isAuthenticated
+                  ? (user?.name || "O").slice(0, 1).toUpperCase()
+                  : "G"}
+              </span>
+              <span className="truncate font-serif font-bold">
+                {isAuthenticated ? user.name : "Giriş Yap / Profil"}
+              </span>
             </span>
-            <Share2 className="w-3.5 h-3.5" />
+            <span className="px-2 py-0.5 rounded-md bg-background/80 text-[10px] font-bold text-[#5C6B57] group-hover:text-[#2C2520] shrink-0">
+              {isAuthenticated ? "Senkron" : "Bulut"}
+            </span>
           </button>
 
-          <button
-            onClick={() => setSettingsOpen(true)}
-            className="w-full py-2.5 px-3.5 rounded-xl bg-surface-elevated hover:bg-background border border-border text-xs font-semibold flex items-center justify-between transition-all"
-          >
-            <span className="flex items-center gap-2 text-foreground">
-              <Settings className="w-4 h-4 text-[#B85D3B]" />
-              <span>Ayarlar &amp; Görünüm</span>
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-background border border-border text-[10px] font-bold text-muted">
-              {activeTheme === "sepia"
-                ? "Sepya (Ana)"
-                : activeTheme === "dark"
-                ? "Dark Sepia"
-                : "Fildişi"}
-            </span>
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setCloudModalOpen(true)}
+              className="py-2 px-3 rounded-xl bg-[#5C6B57]/15 hover:bg-[#5C6B57] text-[#5C6B57] hover:text-[#F6F1E7] border border-[#5C6B57]/30 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all"
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>Cihaz &amp; Kur</span>
+            </button>
+
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="py-2 px-3 rounded-xl bg-surface-elevated hover:bg-background border border-border text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all text-foreground"
+            >
+              <Settings className="w-3.5 h-3.5 text-[#B85D3B]" />
+              <span>Görünüm</span>
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -260,11 +315,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <button
-            onClick={() => setCloudModalOpen(true)}
-            className="p-2 rounded-xl bg-[#B85D3B]/15 border border-[#B85D3B]/30 text-[#B85D3B]"
-            title="Paylaş & Bulut Eşitleme"
+            onClick={() => setAuthModalOpen(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-[#B85D3B]/15 border border-[#B85D3B]/35 text-[#B85D3B] text-[11px] font-bold flex items-center gap-1"
+            title="Giriş Yap / Profil"
           >
-            <Share2 className="w-3.5 h-3.5" />
+            <User className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">
+              {isAuthenticated ? user.name.split(" ")[0] : "Giriş"}
+            </span>
           </button>
 
           <button
@@ -285,7 +343,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="zen-chrome md:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur-xl border-t border-border grid grid-cols-4 py-1.5 px-2 transition-opacity duration-500">
+      <nav className="zen-chrome md:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur-xl border-t border-border grid grid-cols-5 py-1.5 px-1.5 transition-opacity duration-500">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive =
@@ -297,11 +355,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[10px] font-semibold transition-colors ${
-                isActive ? "text-indigo-400 font-bold" : "text-muted"
+                isActive ? "text-[#B85D3B] font-bold" : "text-muted"
               }`}
             >
-              <Icon className="w-5 h-5 mb-0.5" />
-              <span className="truncate max-w-[76px]">{item.label}</span>
+              <Icon className="w-4 h-4 mb-0.5" />
+              <span className="truncate max-w-[68px]">{item.label}</span>
             </Link>
           );
         })}
@@ -313,8 +371,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="w-full max-w-md rounded-3xl bg-surface border border-border p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
-                <Settings className="w-5 h-5 text-indigo-400" />
-                <h3 className="font-extrabold text-base">
+                <Settings className="w-5 h-5 text-[#B85D3B]" />
+                <h3 className="font-serif font-bold text-base">
                   Ayarlar &amp; Görünüm Modu
                 </h3>
               </div>
@@ -328,7 +386,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <div className="space-y-2.5">
               <div className="text-xs font-bold uppercase tracking-wider text-muted">
-                Renk &amp; Kağıt Teması (Varsayılan: Sepya)
+                Renk &amp; Kağıt Teması (Varsayılan: Sıcak Sepya)
               </div>
               <div className="space-y-2">
                 {THEME_OPTIONS.map((opt) => {
@@ -340,15 +398,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       onClick={() => setTheme(opt.id)}
                       className={`w-full p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all ${
                         isSelected
-                          ? "bg-indigo-600/15 border-indigo-500 shadow-sm"
-                          : "bg-surface-elevated/70 border-border hover:border-indigo-500/40"
+                          ? "bg-[#B85D3B]/15 border-[#B85D3B] shadow-sm"
+                          : "bg-surface-elevated/70 border-border hover:border-[#B85D3B]/40"
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <div
                           className={`w-9 h-9 rounded-xl flex items-center justify-center ${
                             isSelected
-                              ? "bg-indigo-600 text-white"
+                              ? "bg-[#B85D3B] text-[#F6F1E7]"
                               : "bg-surface border border-border text-muted"
                           }`}
                         >
@@ -360,7 +418,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         </div>
                       </div>
                       {isSelected && (
-                        <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+                        <span className="px-2.5 py-0.5 rounded-full bg-[#B85D3B] text-[#F6F1E7] text-[10px] font-bold">
                           Aktif
                         </span>
                       )}
@@ -387,7 +445,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 }
                 className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
                   readerPrefs.autoRampEnabled
-                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                    ? "bg-[#5C6B57]/15 border-[#5C6B57]/40 text-[#5C6B57]"
                     : "bg-surface-elevated border-border text-muted"
                 }`}
               >
@@ -402,6 +460,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <CloudSyncAndShareModal
         open={cloudModalOpen}
         onClose={() => setCloudModalOpen(false)}
+      />
+
+      {/* Supabase Auth & Multi-Account Profile Modal */}
+      <AuthProfileModal
+        open={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
       />
     </div>
   );

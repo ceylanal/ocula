@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   BookOpen,
@@ -19,9 +20,21 @@ import {
   Play,
   Pause,
   Gauge,
+  Globe,
+  Lock,
+  Users,
+  Share2,
+  Copy,
+  Check,
+  Highlighter,
+  MessageSquarePlus,
+  Quote,
+  Heart,
+  Compass,
+  KeyRound,
 } from "lucide-react";
 import { useSupereadStore } from "@/store/useSupereadStore";
-import { Book, FontFamily, ReadingMode } from "@/types";
+import { Book, BookVisibility, FontFamily, ReadingMode } from "@/types";
 import { parseUploadedBookFile } from "@/lib/fileParser";
 import { tokenizeParagraphs } from "@/lib/textUtils";
 import { RsvpEngine } from "@/components/drills/RsvpEngine";
@@ -36,10 +49,42 @@ const FONT_CLASS_MAP: Record<FontFamily, string> = {
   mono: "font-mono",
 };
 
+const VISIBILITY_OPTIONS: {
+  id: BookVisibility;
+  label: string;
+  shortLabel: string;
+  desc: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  {
+    id: "private",
+    label: "Sadece Ben (Özel)",
+    shortLabel: "Sadece Ben",
+    desc: "Yalnızca kendi kütüphanenizde ve bulut hesabınızda görünür.",
+    icon: Lock,
+  },
+  {
+    id: "friends",
+    label: "Arkadaşlarla Paylaş (Davet Linki / Kodu Üret)",
+    shortLabel: "Arkadaşlarla Paylaş",
+    desc: "Özel davet kodu ve link üretilir; linke tıklayanlar kitabı kütüphanesine ekleyebilir.",
+    icon: Users,
+  },
+  {
+    id: "public",
+    label: "Topluluk Kütüphanesi (Herkese Açık)",
+    shortLabel: "Topluluk Kütüphanesi",
+    desc: "Tüm OkurLab okurları 'Keşfet' sekmesinden bu kitaba erişip birlikte okuyabilir.",
+    icon: Globe,
+  },
+];
+
 function LibraryAndReaderContent() {
   const searchParams = useSearchParams();
   const {
     books,
+    communityBooks,
+    communityMarginalia,
     user,
     readingProgress,
     bookNotes,
@@ -51,26 +96,55 @@ function LibraryAndReaderContent() {
     setLastActiveBookId,
     addBook,
     deleteCustomBook,
+    updateBookVisibility,
+    importBookByInviteOrCommunity,
     addBookNote,
     deleteBookNote,
+    toggleMarginaliaLike,
+    addCommunityQuotePost,
     markDailyTaskByType,
-    recordExercise,
     recordReadingSession,
   } = useSupereadStore();
 
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
   const [readingMode, setReadingMode] = useState<ReadingMode>("standard");
   const [selectedCategory, setSelectedCategory] = useState<string>("Tümü");
+  const [catalogTab, setCatalogTab] = useState<"my_books" | "discover">(
+    "my_books"
+  );
+
+  // Upload & Visibility state
   const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
+  const [uploadVisibility, setUploadVisibility] =
+    useState<BookVisibility>("private");
   const [isParsingFile, setIsParsingFile] = useState<boolean>(false);
   const [parsingStatus, setParsingStatus] = useState<string>("");
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Notes drawer state inside Smart Reader
+  // Invite Code / Link Importer state
+  const [inviteCodeInput, setInviteCodeInput] = useState<string>("");
+  const [inviteFeedback, setInviteFeedback] = useState<{
+    type: "ok" | "err";
+    msg: string;
+  } | null>(null);
+  const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
+
+  // Smart Reader Marginalia & Notes state
+  const [showCommunityMarginalia, setShowCommunityMarginalia] =
+    useState<boolean>(true);
   const [showNotesPanel, setShowNotesPanel] = useState<boolean>(false);
   const [newNoteText, setNewNoteText] = useState<string>("");
   const [selectedQuote, setSelectedQuote] = useState<string>("");
+
+  // Floating Sepia Annotation Popover state (when user selects text in reader)
+  const [selectionMenu, setSelectionMenu] = useState<{
+    text: string;
+    wordIndex: number;
+    showNoteInput: boolean;
+    noteDraft: string;
+  } | null>(null);
+  const [annotationToast, setAnnotationToast] = useState<string | null>(null);
 
   // Free Reading ("Serbest Okuma - Doğal WPM Ölçer") live timer & Auto-Ramp state
   const [isFreeReadingActive, setIsFreeReadingActive] = useState<boolean>(true);
@@ -104,7 +178,6 @@ function LibraryAndReaderContent() {
       return;
     }
 
-    // Start Zen dimming shortly after Pacer or Audio starts
     zenTimeoutRef.current = setTimeout(() => {
       setZenDimmed(true);
       if (typeof document !== "undefined") {
@@ -141,13 +214,36 @@ function LibraryAndReaderContent() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Sync URL params (?book=...&mode=...)
+  // Sync URL params (?book=...&mode=...&invite=...)
   useEffect(() => {
+    const inviteParam = searchParams.get("invite");
+    if (inviteParam) {
+      const imported = importBookByInviteOrCommunity(inviteParam);
+      if (imported.ok && imported.book) {
+        setInviteFeedback({
+          type: "ok",
+          msg: imported.message,
+        });
+        setActiveBookId(imported.book.id);
+        setLastActiveBookId(imported.book.id);
+        return;
+      }
+    }
+
     const bookParam = searchParams.get("book");
     const modeParam = searchParams.get("mode") as ReadingMode | null;
-    if (bookParam && books.some((b) => b.id === bookParam)) {
-      setActiveBookId(bookParam);
-      setLastActiveBookId(bookParam);
+    if (bookParam) {
+      const existsInMyBooks = books.some((b) => b.id === bookParam);
+      if (existsInMyBooks) {
+        setActiveBookId(bookParam);
+        setLastActiveBookId(bookParam);
+      } else {
+        const imported = importBookByInviteOrCommunity(bookParam);
+        if (imported.ok && imported.book) {
+          setActiveBookId(imported.book.id);
+          setLastActiveBookId(imported.book.id);
+        }
+      }
       if (modeParam && ["standard", "rsvp", "pacer"].includes(modeParam)) {
         setReadingMode(modeParam);
       } else {
@@ -155,23 +251,37 @@ function LibraryAndReaderContent() {
         if (saved) setReadingMode(saved);
       }
     }
-  }, [searchParams, books]);
+  }, [searchParams]);
 
   const activeBook: Book | undefined = useMemo(
-    () => books.find((b) => b.id === activeBookId),
-    [books, activeBookId]
+    () =>
+      books.find((b) => b.id === activeBookId) ||
+      communityBooks.find((b) => b.id === activeBookId),
+    [books, communityBooks, activeBookId]
   );
+
+  // Combined public community books for "Keşfet (Topluluk Kütüphanesi)"
+  const discoverBooks = useMemo(() => {
+    const map = new Map<string, Book>();
+    communityBooks.forEach((b) => map.set(b.id, b));
+    books
+      .filter((b) => b.visibility === "public")
+      .forEach((b) => map.set(b.id, b));
+    return Array.from(map.values());
+  }, [communityBooks, books]);
 
   const categories = useMemo(() => {
     const set = new Set<string>(["Tümü"]);
-    books.forEach((b) => set.add(b.category));
+    const source = catalogTab === "my_books" ? books : discoverBooks;
+    source.forEach((b) => set.add(b.category));
     return Array.from(set);
-  }, [books]);
+  }, [books, discoverBooks, catalogTab]);
 
   const filteredBooks = useMemo(() => {
-    if (selectedCategory === "Tümü") return books;
-    return books.filter((b) => b.category === selectedCategory);
-  }, [books, selectedCategory]);
+    const source = catalogTab === "my_books" ? books : discoverBooks;
+    if (selectedCategory === "Tümü") return source;
+    return source.filter((b) => b.category === selectedCategory);
+  }, [books, discoverBooks, selectedCategory, catalogTab]);
 
   // Tokenize active book for Standard mode word tracking & synchronized switching
   const tokenizedActiveBook = useMemo(() => {
@@ -184,7 +294,9 @@ function LibraryAndReaderContent() {
     : undefined;
   const currentWordIndex = currentProgress?.current_word_index ?? 0;
   const currentWpm =
-    currentProgress?.preferred_wpm ?? user.current_wpm ?? readerPrefs.defaultWpm;
+    currentProgress?.preferred_wpm ??
+    user.current_wpm ??
+    readerPrefs.defaultWpm;
 
   // Reset free reading baseline when book opens
   useEffect(() => {
@@ -194,6 +306,7 @@ function LibraryAndReaderContent() {
       );
       setFreeReadingSeconds(0);
       setIsFreeReadingActive(true);
+      setSelectionMenu(null);
     }
   }, [activeBookId]);
 
@@ -210,6 +323,13 @@ function LibraryAndReaderContent() {
     const t = setTimeout(() => setSessionSavedBadge(null), 4000);
     return () => clearTimeout(t);
   }, [sessionSavedBadge]);
+
+  // Clear annotation toast after 4.5s
+  useEffect(() => {
+    if (!annotationToast) return;
+    const t = setTimeout(() => setAnnotationToast(null), 4500);
+    return () => clearTimeout(t);
+  }, [annotationToast]);
 
   // Free Reading ("Serbest Okuma - Doğal WPM Ölçer") timer & 2-minute Auto-Ramp
   useEffect(() => {
@@ -280,15 +400,38 @@ function LibraryAndReaderContent() {
     }
   };
 
+  // Personal notes for this book
   const activeBookNotes = useMemo(
     () =>
-      activeBook
-        ? bookNotes.filter((n) => n.book_id === activeBook.id)
-        : [],
+      activeBook ? bookNotes.filter((n) => n.book_id === activeBook.id) : [],
     [bookNotes, activeBook]
   );
 
+  // Community Marginalia (both community notes & public highlights for this book)
+  const activeBookMarginalia = useMemo(() => {
+    if (!activeBook) return [];
+    const list = communityMarginalia.filter((n) => n.book_id === activeBook.id);
+    // If custom book has no community notes yet, include user's own notes + sample literary marginalia
+    return list;
+  }, [communityMarginalia, activeBook]);
+
+  // Set of highlighted quotes in this book for visual underlining
+  const highlightedSnippets = useMemo(() => {
+    const snippets: string[] = [];
+    activeBookNotes.forEach((n) => {
+      if (n.selected_text) snippets.push(n.selected_text.toLowerCase());
+    });
+    activeBookMarginalia.forEach((n) => {
+      if (n.selected_text) snippets.push(n.selected_text.toLowerCase());
+    });
+    return snippets;
+  }, [activeBookNotes, activeBookMarginalia]);
+
   const handleOpenBook = (bookId: string, mode?: ReadingMode) => {
+    // Ensure book is in user's library if opened from Discover tab
+    if (!books.some((b) => b.id === bookId)) {
+      importBookByInviteOrCommunity(bookId);
+    }
     const saved = readingProgress[bookId];
     const targetMode = mode || saved?.reading_mode || "pacer";
     setActiveBookId(bookId);
@@ -315,7 +458,10 @@ function LibraryAndReaderContent() {
           : currentWpm;
       handlePersistReadingSession({
         wordIndex: currentWordIndex,
-        wordsRead: progressedWords > 0 ? progressedWords : Math.round((currentWpm * freeReadingSeconds) / 60),
+        wordsRead:
+          progressedWords > 0
+            ? progressedWords
+            : Math.round((currentWpm * freeReadingSeconds) / 60),
         durationSeconds: freeReadingSeconds,
         finalWpm: naturalWpm,
         mode: "standard",
@@ -324,7 +470,7 @@ function LibraryAndReaderContent() {
     setActiveBookId(null);
   };
 
-  // Handle PDF / EPUB / TXT / MD File Processing
+  // Handle PDF / EPUB / TXT / MD File Processing with chosen Visibility
   const processUploadedFile = async (file: File) => {
     setIsParsingFile(true);
     setParsingStatus("Dosya okunuyor...");
@@ -335,6 +481,11 @@ function LibraryAndReaderContent() {
         setParsingStatus(status);
       });
       const pageInfo = parsed.pageCount ? `${parsed.pageCount} sayfa, ` : "";
+      const generatedShareCode = `OKUR-${Math.random()
+        .toString(36)
+        .substring(2, 7)
+        .toUpperCase()}`;
+
       const newBook: Book = {
         id: `book-custom-${Date.now()}`,
         title: parsed.title,
@@ -344,11 +495,15 @@ function LibraryAndReaderContent() {
         word_count: parsed.wordCount,
         cover_gradient:
           parsed.format === "PDF"
-            ? "from-rose-600 via-orange-600 to-amber-700"
-            : "from-fuchsia-600 via-purple-600 to-indigo-700",
+            ? "from-[#B85D3B] via-[#8C4327] to-[#2C2520]"
+            : "from-[#5C6B57] via-[#4A5D4E] to-[#2C2520]",
         summary: `${file.name} (${parsed.format}) dosyasından dönüştürüldü (${pageInfo}${parsed.paragraphs.length} paragraf, ${parsed.wordCount} kelime). Serbest Okuma, Pacer ve RSVP modlarına hazır.`,
         content: parsed.paragraphs,
         is_custom: true,
+        visibility: uploadVisibility,
+        share_code: generatedShareCode,
+        owner_id: user.id,
+        owner_name: user.name,
       };
 
       addBook(newBook);
@@ -381,6 +536,145 @@ function LibraryAndReaderContent() {
     await processUploadedFile(file);
   };
 
+  // Invite Code / Link submission
+  const handleInviteSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const raw = inviteCodeInput.trim();
+    if (!raw) return;
+
+    // Extract ?invite=CODE if full URL was pasted
+    let code = raw;
+    try {
+      if (raw.includes("invite=")) {
+        const u = new URL(raw);
+        code = u.searchParams.get("invite") || raw;
+      }
+    } catch {
+      // keep raw
+    }
+
+    const imported = importBookByInviteOrCommunity(code);
+    if (imported.ok && imported.book) {
+      setInviteFeedback({
+        type: "ok",
+        msg: imported.message,
+      });
+      setInviteCodeInput("");
+      setCatalogTab("my_books");
+    } else {
+      setInviteFeedback({
+        type: "err",
+        msg:
+          imported.message ||
+          "Bu davet koduna ait kitap bulunamadı. Örnek kodlar: OKUR-KAFKA, OKUR-ZWEIG, OKUR-MONTAIGNE",
+      });
+    }
+  };
+
+  const handleCopyInviteLink = (book: Book) => {
+    const code =
+      book.share_code ||
+      `OKUR-${book.id.replace(/[^a-zA-Z0-9]/g, "").slice(-5).toUpperCase()}`;
+    const origin =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "https://ocula-read.vercel.app";
+    const shareUrl = `${origin}/library?invite=${code}`;
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(shareUrl).catch(() => {});
+    }
+    setCopiedShareId(book.id);
+    setTimeout(() => setCopiedShareId(null), 2500);
+  };
+
+  // Detect text selection inside the Smart Reader for the Sepia Annotation Menu
+  const handleReaderTextSelection = () => {
+    if (typeof window === "undefined") return;
+    const sel = window.getSelection();
+    const text = sel ? sel.toString().trim() : "";
+    if (text && text.length >= 6 && text.length <= 600) {
+      setSelectionMenu({
+        text,
+        wordIndex: currentWordIndex,
+        showNoteInput: false,
+        noteDraft: "",
+      });
+      setSelectedQuote(text);
+    }
+  };
+
+  const handleQuickHighlight = () => {
+    if (!activeBook || !selectionMenu) return;
+    addBookNote({
+      book_id: activeBook.id,
+      word_index: selectionMenu.wordIndex,
+      selected_text: selectionMenu.text,
+      content: "Altı çizili favori cümle.",
+      type: "highlight",
+      is_public: true,
+    });
+    setAnnotationToast(
+      "Cümlenin altı çizildi ve Topluluk Notları (Marginalia) panosuna kaydedildi."
+    );
+    setSelectionMenu(null);
+    if (typeof window !== "undefined") {
+      window.getSelection()?.removeAllRanges();
+    }
+  };
+
+  const handleSaveSelectionNote = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeBook || !selectionMenu) return;
+    addBookNote({
+      book_id: activeBook.id,
+      word_index: selectionMenu.wordIndex,
+      selected_text: selectionMenu.text,
+      content:
+        selectionMenu.noteDraft.trim() || "Kenar notu ve okuma düşüncesi.",
+      type: "note",
+      is_public: true,
+    });
+    setShowCommunityMarginalia(true);
+    setAnnotationToast(
+      "Kenar notunuz eklendi ve sağdaki Topluluk Notları (Marginalia) sütununda paylaşıldı."
+    );
+    setSelectionMenu(null);
+    if (typeof window !== "undefined") {
+      window.getSelection()?.removeAllRanges();
+    }
+  };
+
+  const handleShareQuoteCardToCommunity = () => {
+    if (!activeBook || !selectionMenu) return;
+    const noteBody =
+      selectionMenu.noteDraft.trim() ||
+      `${activeBook.title} okumasından (${currentWpm} WPM) altı çizili alıntı.`;
+
+    addBookNote({
+      book_id: activeBook.id,
+      word_index: selectionMenu.wordIndex,
+      selected_text: selectionMenu.text,
+      content: noteBody,
+      type: "highlight",
+      is_public: true,
+    });
+
+    addCommunityQuotePost({
+      book_id: activeBook.id,
+      quote_text: selectionMenu.text,
+      note_comment: noteBody,
+      word_index: selectionMenu.wordIndex,
+    });
+
+    setAnnotationToast(
+      "Alıntı Kartı 'Okur Salonu' (/community) sosyal akışında paylaşıldı!"
+    );
+    setSelectionMenu(null);
+    if (typeof window !== "undefined") {
+      window.getSelection()?.removeAllRanges();
+    }
+  };
+
   const handleAddNote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeBook || !newNoteText.trim()) return;
@@ -390,13 +684,16 @@ function LibraryAndReaderContent() {
       selected_text:
         selectedQuote ||
         tokenizedActiveBook.words
-          .slice(currentWordIndex, currentWordIndex + 6)
+          .slice(currentWordIndex, currentWordIndex + 8)
           .map((w) => w.word)
           .join(" "),
       content: newNoteText.trim(),
+      type: "note",
+      is_public: true,
     });
     setNewNoteText("");
     setSelectedQuote("");
+    setAnnotationToast("Kenar notunuz kaydedildi.");
   };
 
   // ============================================================================
@@ -414,6 +711,8 @@ function LibraryAndReaderContent() {
             Math.max(110, Math.round((freeWordsDelta / freeReadingSeconds) * 60))
           )
         : currentWpm;
+
+    const isSidePanelOpen = showCommunityMarginalia || showNotesPanel;
 
     return (
       <div className="space-y-5">
@@ -468,7 +767,7 @@ function LibraryAndReaderContent() {
               }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>Serbest Okuma (Doğal WPM Ölçer)</span>
+              <span>Serbest Okuma</span>
             </button>
 
             <button
@@ -512,7 +811,7 @@ function LibraryAndReaderContent() {
             </button>
           </div>
 
-          {/* Right: Kademeli İvme (Auto-Ramp) Toggle + Typography + Notes */}
+          {/* Right: Kademeli İvme (Auto-Ramp) Toggle + Topluluk Notları (Göz İkonu) + Typography + Notes */}
           <div className="flex flex-wrap items-center gap-2">
             {/* Kademeli İvme (Auto-Ramp) Toggle Button */}
             <button
@@ -529,7 +828,7 @@ function LibraryAndReaderContent() {
               title="Aktifken her 2 dakikada veya 400 kelimede bir okuma hızı otomatik olarak +10 WPM artar"
             >
               <TrendingUp className="w-3.5 h-3.5" />
-              <span>Kademeli İvme (Auto-Ramp)</span>
+              <span className="hidden sm:inline">Kademeli İvme</span>
               <span
                 className={`px-1.5 py-0.5 rounded text-[10px] ${
                   readerPrefs.autoRampEnabled
@@ -537,32 +836,25 @@ function LibraryAndReaderContent() {
                     : "bg-surface text-muted"
                 }`}
               >
-                {readerPrefs.autoRampEnabled ? "+10 WPM AÇIK" : "KAPALI"}
+                {readerPrefs.autoRampEnabled ? "+10 WPM" : "KAPALI"}
               </span>
             </button>
 
-            {/* Font Family */}
-            <div className="hidden xl:flex rounded-xl bg-surface-elevated p-1 border border-border">
-              {(
-                [
-                  { id: "serif", label: "Literata (Kitap)" },
-                  { id: "sans", label: "Sans" },
-                  { id: "mono", label: "Mono" },
-                ] as const
-              ).map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => updateReaderPrefs({ fontFamily: f.id })}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                    readerPrefs.fontFamily === f.id
-                      ? "bg-surface text-foreground border border-border"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+            {/* Topluluk Notları (Göz İkonu - Marginalia Toggle) */}
+            <button
+              onClick={() =>
+                setShowCommunityMarginalia((prev) => !prev)
+              }
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all ${
+                showCommunityMarginalia
+                  ? "bg-[#B85D3B] text-[#F6F1E7] border-[#B85D3B] shadow-sm"
+                  : "bg-surface-elevated border-border text-foreground hover:border-[#B85D3B]/40"
+              }`}
+              title="Aynı kitabı okuyan diğer okurların bıraktığı kenar notlarını ve en çok altı çizilen cümleleri sağ kenarda (Marginalia) göster"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Topluluk Notları ({activeBookMarginalia.length})</span>
+            </button>
 
             {/* Font Size A- / A+ */}
             <div className="flex items-center rounded-xl bg-surface-elevated border border-border p-1">
@@ -593,30 +885,30 @@ function LibraryAndReaderContent() {
               </button>
             </div>
 
-            {/* Notes Drawer Button */}
+            {/* Personal Notes Drawer Button */}
             <button
               onClick={() => setShowNotesPanel((v) => !v)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-2 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-all ${
                 showNotesPanel
                   ? "bg-[#B85D3B]/15 border-[#B85D3B]/40 text-[#B85D3B]"
                   : "bg-surface-elevated border-border text-foreground"
               }`}
             >
               <StickyNote className="w-3.5 h-3.5" />
-              <span>Notlar ({activeBookNotes.length})</span>
+              <span>Notlarım ({activeBookNotes.length})</span>
             </button>
           </div>
         </div>
 
-        {/* Live Auto-Ramp Notification or Session Saved Banner */}
-        {(headerRampBanner || sessionSavedBadge) && (
+        {/* Live Auto-Ramp Notification, Session Saved or Annotation Toast Banner */}
+        {(headerRampBanner || sessionSavedBadge || annotationToast) && (
           <div className="px-4 py-2.5 rounded-2xl bg-surface border border-[#B85D3B]/35 flex flex-wrap items-center justify-between gap-2 text-xs">
             {headerRampBanner && (
               <span className="font-bold text-[#B85D3B] flex items-center gap-1.5">
                 <TrendingUp className="w-4 h-4 text-[#5C6B57]" />
                 <span>
-                  Hız İvmesi: {headerRampBanner.from} &rarr; {headerRampBanner.to}{" "}
-                  WPM (+10 WPM Kademeli Artış Uygulandı)
+                  Hız İvmesi: {headerRampBanner.from} &rarr;{" "}
+                  {headerRampBanner.to} WPM (+10 WPM Kademeli Artış Uygulandı)
                 </span>
               </span>
             )}
@@ -624,6 +916,99 @@ function LibraryAndReaderContent() {
               <span className="font-semibold text-[#5C6B57]">
                 ✓ {sessionSavedBadge}
               </span>
+            )}
+            {annotationToast && (
+              <div className="flex items-center gap-3 font-semibold text-[#2C2520]">
+                <span className="text-[#B85D3B]">✦ {annotationToast}</span>
+                <Link
+                  href="/community"
+                  className="underline text-[#5C6B57] hover:text-[#B85D3B] font-bold"
+                >
+                  Okur Salonu&apos;nda Gör &rarr;
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Floating Sepia Annotation Popover Menu (when user selects a sentence/word block) */}
+        {selectionMenu && (
+          <div className="p-4 rounded-2xl bg-[#EFE8DA] border-2 border-[#B85D3B] shadow-xl space-y-3 animate-in fade-in duration-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#B85D3B]">
+                  <Quote className="w-3.5 h-3.5" />
+                  <span>Seçilen Metin • Sepya Alıntı &amp; Kenar Notu Menüsü</span>
+                </div>
+                <p className="font-serif italic text-sm text-[#2C2520] border-l-2 border-[#B85D3B] pl-3 line-clamp-3">
+                  &ldquo;{selectionMenu.text}&rdquo;
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectionMenu(null)}
+                className="px-2.5 py-1 rounded-lg bg-background border border-border text-xs font-semibold text-muted hover:text-foreground shrink-0"
+              >
+                Kapat
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleQuickHighlight}
+                className="px-3.5 py-2 rounded-xl bg-[#E6D2B5] hover:bg-[#B85D3B] text-[#2C2520] hover:text-[#F6F1E7] border border-[#B85D3B]/40 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+              >
+                <Highlighter className="w-3.5 h-3.5" />
+                <span>Altını Çiz</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectionMenu((prev) =>
+                    prev ? { ...prev, showNoteInput: !prev.showNoteInput } : null
+                  )
+                }
+                className="px-3.5 py-2 rounded-xl bg-background hover:bg-[#5C6B57] text-[#2C2520] hover:text-[#F6F1E7] border border-border text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+              >
+                <MessageSquarePlus className="w-3.5 h-3.5" />
+                <span>Kenar Notu / Yorum Ekle</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareQuoteCardToCommunity}
+                className="px-3.5 py-2 rounded-xl bg-[#B85D3B] hover:bg-[#A14D2E] text-[#F6F1E7] text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Alıntı Kartı Paylaş (Okur Salonu)</span>
+              </button>
+            </div>
+
+            {selectionMenu.showNoteInput && (
+              <form
+                onSubmit={handleSaveSelectionNote}
+                className="pt-2 flex flex-col sm:flex-row gap-2"
+              >
+                <input
+                  type="text"
+                  value={selectionMenu.noteDraft}
+                  onChange={(e) =>
+                    setSelectionMenu((prev) =>
+                      prev ? { ...prev, noteDraft: e.target.value } : null
+                    )
+                  }
+                  placeholder="Bu cümle hakkındaki kenar notunuzu veya yorumunuzu yazın..."
+                  className="flex-1 px-3.5 py-2 rounded-xl bg-background border border-border text-xs focus:outline-none focus:border-[#B85D3B]"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[#5C6B57] text-[#F6F1E7] text-xs font-bold shrink-0"
+                >
+                  Kenar Notunu Kaydet
+                </button>
+              </form>
             )}
           </div>
         )}
@@ -667,9 +1052,13 @@ function LibraryAndReaderContent() {
           }}
         />
 
-        {/* Main Reader Layout (with collapsible Notes Sidebar) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className={showNotesPanel ? "lg:col-span-8" : "lg:col-span-12"}>
+        {/* Main Reader Layout (with Right-Side Marginalia & Personal Notes Panel) */}
+        <div
+          className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"
+          onMouseUp={handleReaderTextSelection}
+          onTouchEnd={handleReaderTextSelection}
+        >
+          <div className={isSidePanelOpen ? "lg:col-span-8" : "lg:col-span-12"}>
             {/* MODE A: SERBEST OKUMA (DOĞAL WPM ÖLÇER) */}
             {readingMode === "standard" && (
               <div className="rounded-3xl bg-background border-2 border-border overflow-hidden shadow-lg">
@@ -708,7 +1097,6 @@ function LibraryAndReaderContent() {
                     <button
                       onClick={() => {
                         if (isFreeReadingActive) {
-                          // Pause & save free reading session
                           setIsFreeReadingActive(false);
                           handlePersistReadingSession({
                             wordIndex: currentWordIndex,
@@ -739,7 +1127,7 @@ function LibraryAndReaderContent() {
                       {isFreeReadingActive ? (
                         <>
                           <Pause className="w-3.5 h-3.5" />
-                          <span>Duraklat & Kaydet</span>
+                          <span>Duraklat &amp; Kaydet</span>
                         </>
                       ) : (
                         <>
@@ -749,7 +1137,7 @@ function LibraryAndReaderContent() {
                       )}
                     </button>
                     <span className="text-muted hidden sm:inline">
-                      Kayıtlı Konum:{" "}
+                      Konum:{" "}
                       <strong className="text-foreground">
                         #{currentWordIndex + 1}
                       </strong>
@@ -758,14 +1146,17 @@ function LibraryAndReaderContent() {
                 </div>
 
                 <div
-                  className={`px-6 py-2.5 bg-surface/40 border-b border-border/60 text-[11px] text-muted flex items-center justify-between transition-opacity duration-500 ${
+                  className={`px-6 py-2.5 bg-surface/40 border-b border-border/60 text-[11px] text-muted flex flex-wrap items-center justify-between gap-2 transition-opacity duration-500 ${
                     zenDimmed ? "opacity-15 hover:opacity-100" : "opacity-100"
                   }`}
                 >
                   <span>
-                    İpucu: Okurken ulaştığınız kelimeye tıkladığınızda{" "}
-                    <strong className="text-foreground">Doğal WPM hızınız</strong>{" "}
-                    ve kaldığınız kelime otomatik hesaplanıp kaydedilir.
+                    İpucu: Herhangi bir cümleyi fareyle seçerek{" "}
+                    <strong className="text-[#B85D3B]">
+                      Altını Çizebilir, Kenar Notu Ekleyebilir veya Alıntı Kartı
+                      Paylaşabilirsiniz
+                    </strong>
+                    .
                   </span>
                   {readerPrefs.autoRampEnabled && (
                     <button
@@ -780,7 +1171,7 @@ function LibraryAndReaderContent() {
                           to
                         );
                       }}
-                      className="text-[#5C6B57] hover:underline font-semibold shrink-0 ml-2"
+                      className="text-[#5C6B57] hover:underline font-semibold shrink-0"
                     >
                       ⚡ +10 WPM İvme Uygula ({currentWpm} &rarr;{" "}
                       {Math.min(1000, currentWpm + 10)})
@@ -796,71 +1187,90 @@ function LibraryAndReaderContent() {
                   }}
                 >
                   {tokenizedActiveBook.paragraphsOfWords.map(
-                    (paraWords, pIdx) => (
-                      <p key={pIdx} className="text-foreground">
-                        {paraWords.map((token) => {
-                          const isBookmarkedWord =
-                            token.globalIndex === currentWordIndex;
-                          return (
-                            <React.Fragment key={token.globalIndex}>
-                              <span
-                                onClick={() => {
-                                  const delta = Math.max(
-                                    0,
-                                    token.globalIndex - freeStartWordIndex
-                                  );
-                                  const computedWpm =
-                                    delta >= 10 && freeReadingSeconds >= 4
-                                      ? Math.min(
-                                          950,
-                                          Math.max(
-                                            110,
-                                            Math.round(
-                                              (delta / freeReadingSeconds) * 60
+                    (paraWords, pIdx) => {
+                      const paraPlain = activeBook.content[pIdx] || "";
+                      const hasCommunityHighlight = highlightedSnippets.some(
+                        (s) =>
+                          s.length > 10 &&
+                          paraPlain.toLowerCase().includes(s.slice(0, 28))
+                      );
+
+                      return (
+                        <p
+                          key={pIdx}
+                          className={`text-foreground transition-colors ${
+                            hasCommunityHighlight
+                              ? "border-l-2 border-[#B85D3B]/60 pl-3 bg-[#E6D2B5]/25 rounded-r-xl py-1"
+                              : ""
+                          }`}
+                        >
+                          {paraWords.map((token) => {
+                            const isBookmarkedWord =
+                              token.globalIndex === currentWordIndex;
+                            return (
+                              <React.Fragment key={token.globalIndex}>
+                                <span
+                                  onClick={() => {
+                                    const delta = Math.max(
+                                      0,
+                                      token.globalIndex - freeStartWordIndex
+                                    );
+                                    const computedWpm =
+                                      delta >= 10 && freeReadingSeconds >= 4
+                                        ? Math.min(
+                                            950,
+                                            Math.max(
+                                              110,
+                                              Math.round(
+                                                (delta / freeReadingSeconds) *
+                                                  60
+                                              )
                                             )
                                           )
-                                        )
-                                      : currentWpm;
+                                        : currentWpm;
 
-                                  // Check 400-word Auto-Ramp threshold in free reading
-                                  let nextWpm = computedWpm;
-                                  if (
-                                    readerPrefs.autoRampEnabled &&
-                                    delta >= 400
-                                  ) {
-                                    nextWpm = Math.min(1000, computedWpm + 10);
-                                    setHeaderRampBanner({
-                                      from: computedWpm,
-                                      to: nextWpm,
+                                    let nextWpm = computedWpm;
+                                    if (
+                                      readerPrefs.autoRampEnabled &&
+                                      delta >= 400
+                                    ) {
+                                      nextWpm = Math.min(
+                                        1000,
+                                        computedWpm + 10
+                                      );
+                                      setHeaderRampBanner({
+                                        from: computedWpm,
+                                        to: nextWpm,
+                                      });
+                                    }
+
+                                    handlePersistReadingSession({
+                                      wordIndex: token.globalIndex,
+                                      wordsRead: delta,
+                                      durationSeconds: Math.max(
+                                        1,
+                                        freeReadingSeconds
+                                      ),
+                                      finalWpm: nextWpm,
+                                      mode: "standard",
                                     });
-                                  }
-
-                                  handlePersistReadingSession({
-                                    wordIndex: token.globalIndex,
-                                    wordsRead: delta,
-                                    durationSeconds: Math.max(
-                                      1,
-                                      freeReadingSeconds
-                                    ),
-                                    finalWpm: nextWpm,
-                                    mode: "standard",
-                                  });
-                                  setFreeStartWordIndex(token.globalIndex);
-                                  setFreeReadingSeconds(0);
-                                }}
-                                className={`cursor-pointer rounded px-1 py-0.5 transition-colors ${
-                                  isBookmarkedWord
-                                    ? "okurlab-pacer-focus font-medium"
-                                    : "hover:bg-surface-elevated"
-                                }`}
-                              >
-                                {token.word}
-                              </span>{" "}
-                            </React.Fragment>
-                          );
-                        })}
-                      </p>
-                    )
+                                    setFreeStartWordIndex(token.globalIndex);
+                                    setFreeReadingSeconds(0);
+                                  }}
+                                  className={`cursor-pointer rounded px-1 py-0.5 transition-colors ${
+                                    isBookmarkedWord
+                                      ? "okurlab-pacer-focus font-medium"
+                                      : "hover:bg-surface-elevated"
+                                  }`}
+                                >
+                                  {token.word}
+                                </span>{" "}
+                              </React.Fragment>
+                            );
+                          })}
+                        </p>
+                      );
+                    }
                   )}
                 </div>
               </div>
@@ -963,93 +1373,219 @@ function LibraryAndReaderContent() {
             )}
           </div>
 
-          {/* Collapsible Notes & Bookmarks Drawer */}
-          {showNotesPanel && (
-            <div className="lg:col-span-4 p-5 rounded-3xl bg-surface border border-border space-y-5">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm flex items-center gap-2">
-                  <Bookmark className="w-4 h-4 text-amber-400" />
-                  <span>Kitap Notları & Yer İmleri</span>
-                </h3>
-                <span className="text-xs text-muted">
-                  Kelime #{currentWordIndex + 1}
-                </span>
-              </div>
-
-              <form onSubmit={handleAddNote} className="space-y-2.5">
-                <textarea
-                  rows={3}
-                  value={newNoteText}
-                  onChange={(e) => setNewNoteText(e.target.value)}
-                  placeholder="Mevcut okuma konumuna (#Kelime) düşünce veya özet notu ekleyin..."
-                  className="w-full rounded-xl bg-surface-elevated border border-border p-3 text-xs focus:outline-none focus:border-indigo-500"
-                />
-                <button
-                  type="submit"
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Bu Konuma Not Ekle</span>
-                </button>
-              </form>
-
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                {activeBookNotes.length === 0 ? (
-                  <p className="text-xs text-muted text-center py-6">
-                    Bu kitap için henüz bir not eklenmedi.
-                  </p>
-                ) : (
-                  activeBookNotes.map((note) => (
-                    <div
-                      key={note.id}
-                      className="p-3.5 rounded-2xl bg-surface-elevated border border-border space-y-2"
-                    >
-                      <div className="flex items-center justify-between text-[11px] text-muted">
-                        <button
-                          onClick={() =>
-                            updateReadingProgress(
-                              activeBook.id,
-                              note.word_index,
-                              readingMode,
-                              currentWpm
-                            )
-                          }
-                          className="text-indigo-400 font-semibold hover:underline"
-                        >
-                          Kelime #{note.word_index + 1} konumuna git →
-                        </button>
-                        <button
-                          onClick={() => deleteBookNote(note.id)}
-                          className="text-muted hover:text-rose-400"
-                          title="Notu Sil"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+          {/* RIGHT MARGIN: COMMUNITY MARGINALIA & PERSONAL NOTES PANEL */}
+          {isSidePanelOpen && (
+            <aside className="lg:col-span-4 space-y-5">
+              {/* Community Marginalia ("Topluluk Notları & En Çok Altı Çizilenler") */}
+              {showCommunityMarginalia && (
+                <div className="p-5 rounded-3xl bg-surface border border-border space-y-4 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-border pb-3">
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#B85D3B]">
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Marginalia • Kenar Notları</span>
                       </div>
-                      {note.selected_text && (
-                        <div className="text-[11px] italic text-muted border-l-2 border-indigo-500 pl-2">
-                          &quot;{note.selected_text}&quot;
-                        </div>
-                      )}
-                      <p className="text-xs text-foreground leading-relaxed">
-                        {note.content}
-                      </p>
+                      <h3 className="font-serif font-bold text-base text-foreground">
+                        Topluluk Notları &amp; Altı Çizilenler
+                      </h3>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
+                    <button
+                      onClick={() => setShowCommunityMarginalia(false)}
+                      className="text-xs text-muted hover:text-foreground"
+                    >
+                      Gizle
+                    </button>
+                  </div>
+
+                  {/* Quick Highlight / Note Composer inside Marginalia */}
+                  <form onSubmit={handleAddNote} className="space-y-2">
+                    <textarea
+                      rows={2}
+                      value={newNoteText}
+                      onChange={(e) => setNewNoteText(e.target.value)}
+                      placeholder={
+                        selectedQuote
+                          ? `"${selectedQuote.slice(0, 45)}..." için kenar notu ekle`
+                          : "Bu sayfaya (Kelime #" +
+                            (currentWordIndex + 1) +
+                            ") ortak kenar notu bırakın..."
+                      }
+                      className="w-full rounded-xl bg-background border border-border p-3 text-xs focus:outline-none focus:border-[#B85D3B]"
+                    />
+                    <button
+                      type="submit"
+                      className="w-full py-2 rounded-xl bg-[#B85D3B] hover:bg-[#A14D2E] text-[#F6F1E7] text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Kenar Notu Bırak ({currentWpm} WPM)</span>
+                    </button>
+                  </form>
+
+                  {/* Marginalia Feed */}
+                  <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                    {activeBookMarginalia.length === 0 ? (
+                      <div className="p-4 rounded-2xl bg-background/70 border border-border text-xs text-muted text-center space-y-1">
+                        <p className="font-serif italic text-foreground">
+                          Bu kitapta ilk kenar notunu siz bırakın!
+                        </p>
+                        <p>
+                          Okurken herhangi bir cümleyi seçerek altını çizebilir
+                          veya yorum ekleyebilirsiniz.
+                        </p>
+                      </div>
+                    ) : (
+                      activeBookMarginalia.map((item) => (
+                        <div
+                          key={item.id}
+                          className="p-3.5 rounded-2xl bg-background/90 border border-border space-y-2 hover:border-[#B85D3B]/40 transition-all"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="w-5 h-5 rounded-full bg-[#B85D3B]/20 text-[#B85D3B] text-[10px] font-bold flex items-center justify-center shrink-0">
+                                {(item.author_name || "O")
+                                  .slice(0, 1)
+                                  .toUpperCase()}
+                              </span>
+                              <span className="text-xs font-bold truncate">
+                                {item.author_name || "OkurLab Okuru"}
+                              </span>
+                              {item.author_wpm && (
+                                <span className="px-1.5 py-0.5 rounded bg-[#5C6B57]/15 text-[#5C6B57] text-[10px] font-bold shrink-0">
+                                  {item.author_wpm} WPM
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={() =>
+                                updateReadingProgress(
+                                  activeBook.id,
+                                  item.word_index,
+                                  readingMode,
+                                  currentWpm
+                                )
+                              }
+                              className="text-[11px] font-semibold text-[#B85D3B] hover:underline shrink-0"
+                            >
+                              #{item.word_index + 1} &rarr;
+                            </button>
+                          </div>
+
+                          {item.selected_text && (
+                            <blockquote className="font-serif italic text-xs text-[#2C2520] bg-[#E6D2B5]/45 border-l-2 border-[#B85D3B] pl-2.5 py-1.5 pr-2 rounded-r-lg">
+                              &ldquo;{item.selected_text}&rdquo;
+                            </blockquote>
+                          )}
+
+                          <p className="text-xs text-foreground/90 leading-relaxed">
+                            {item.content}
+                          </p>
+
+                          <div className="flex items-center justify-between pt-1 text-[11px] text-muted">
+                            <span className="inline-flex items-center gap-1">
+                              {item.type === "highlight" ? (
+                                <>
+                                  <Highlighter className="w-3 h-3 text-[#B85D3B]" />
+                                  <span>Popüler Altı Çizili</span>
+                                </>
+                              ) : (
+                                <>
+                                  <StickyNote className="w-3 h-3 text-[#5C6B57]" />
+                                  <span>Kenar Notu</span>
+                                </>
+                              )}
+                            </span>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleMarginaliaLike(item.id)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-surface border border-border hover:border-[#B85D3B] text-foreground transition-colors"
+                              >
+                                <Heart className="w-3 h-3 text-[#B85D3B]" />
+                                <span>{item.likes_count ?? 1}</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Personal Notes Drawer */}
+              {showNotesPanel && (
+                <div className="p-5 rounded-3xl bg-surface border border-border space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-serif font-bold text-sm flex items-center gap-2">
+                      <Bookmark className="w-4 h-4 text-[#B85D3B]" />
+                      <span>Kişisel Notlarım &amp; Yer İmleri</span>
+                    </h3>
+                    <span className="text-xs text-muted">
+                      Kelime #{currentWordIndex + 1}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+                    {activeBookNotes.length === 0 ? (
+                      <p className="text-xs text-muted text-center py-4">
+                        Henüz kişisel not eklenmedi. Metin seçerek veya yukarıdan
+                        ekleyebilirsiniz.
+                      </p>
+                    ) : (
+                      activeBookNotes.map((note) => (
+                        <div
+                          key={note.id}
+                          className="p-3 rounded-2xl bg-background border border-border space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between text-[11px] text-muted">
+                            <button
+                              onClick={() =>
+                                updateReadingProgress(
+                                  activeBook.id,
+                                  note.word_index,
+                                  readingMode,
+                                  currentWpm
+                                )
+                              }
+                              className="text-[#B85D3B] font-semibold hover:underline"
+                            >
+                              Kelime #{note.word_index + 1} konumuna git &rarr;
+                            </button>
+                            <button
+                              onClick={() => deleteBookNote(note.id)}
+                              className="text-muted hover:text-[#B85D3B]"
+                              title="Notu Sil"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          {note.selected_text && (
+                            <div className="font-serif text-[11px] italic text-foreground border-l-2 border-[#B85D3B] pl-2">
+                              &ldquo;{note.selected_text}&rdquo;
+                            </div>
+                          )}
+                          <p className="text-xs text-foreground leading-relaxed">
+                            {note.content}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </aside>
           )}
         </div>
 
-        {/* Phase 4: AI Reading Comprehension Quiz for Any Book (Including Uploaded PDF/EPUB) */}
+        {/* AI Reading Comprehension Quiz for Any Book */}
         <BookComprehensionQuiz book={activeBook} currentWpm={currentWpm} />
       </div>
     );
   }
 
   // ============================================================================
-  // VIEW 2: E-BOOK LIBRARY CATALOG & EPUB/TXT/MD IMPORTER
+  // VIEW 2: E-BOOK LIBRARY CATALOG, SHARING & COMMUNITY DISCOVERY
   // ============================================================================
   return (
     <div className="space-y-6">
@@ -1058,47 +1594,176 @@ function LibraryAndReaderContent() {
         <div>
           <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#B85D3B] mb-1">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>OkurLab • Kitaplığım &amp; Kademeli Hız (Auto-Ramp) Okuyucu</span>
+            <span>
+              OkurLab • Ortak Kütüphane, Kitap Paylaşımı &amp; Auto-Ramp Okuyucu
+            </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-serif font-bold tracking-tight">
-            Kitaplığım &amp; PDF Kütüphanesi
+            Kitaplığım &amp; Ortak Kütüphane
           </h1>
           <p className="text-sm text-muted mt-1">
-            Kütüphanedeki eserleri veya kendi yüklediğiniz{" "}
-            <strong className="text-foreground">PDF, EPUB, TXT, Markdown</strong>{" "}
-            kitaplarını Serbest Okuma (Doğal WPM Ölçer), Pacer (Odak Bloğu) veya RSVP modlarında okuyun.
+            Yüklediğiniz{" "}
+            <strong className="text-foreground">PDF, EPUB, TXT</strong>{" "}
+            kitaplarını{" "}
+            <strong className="text-foreground">Sadece Ben</strong>,{" "}
+            <strong className="text-[#B85D3B]">
+              Arkadaşlarla Paylaş (Davet Linki)
+            </strong>{" "}
+            veya{" "}
+            <strong className="text-[#5C6B57]">
+              Topluluk Kütüphanesi (Herkese Açık)
+            </strong>{" "}
+            olarak yönetin.
           </p>
         </div>
 
         <button
           onClick={() => setShowUploadModal((v) => !v)}
-          className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all shrink-0"
+          className="px-5 py-3 rounded-2xl bg-[#B85D3B] hover:bg-[#A14D2E] text-[#F6F1E7] text-sm font-semibold flex items-center gap-2 shadow-md shadow-[#B85D3B]/20 transition-all shrink-0"
         >
           <Upload className="w-4 h-4" />
           <span>PDF / EPUB / TXT Kitap Yükle</span>
         </button>
       </div>
 
-      {/* File Upload Dropzone Modal */}
+      {/* Tabs: "Kitaplığım" vs "Keşfet (Topluluk Kütüphanesi)" + Invite Code Bar */}
+      <div className="p-4 rounded-3xl bg-surface border border-border flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex rounded-2xl bg-background p-1 border border-border self-start">
+          <button
+            onClick={() => {
+              setCatalogTab("my_books");
+              setSelectedCategory("Tümü");
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+              catalogTab === "my_books"
+                ? "bg-[#B85D3B] text-[#F6F1E7] shadow-sm"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Kitaplığım ({books.length})</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setCatalogTab("discover");
+              setSelectedCategory("Tümü");
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
+              catalogTab === "discover"
+                ? "bg-[#5C6B57] text-[#F6F1E7] shadow-sm"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5" />
+            <span>Keşfet • Topluluk Kütüphanesi ({discoverBooks.length})</span>
+          </button>
+        </div>
+
+        {/* Invite Link / Code Importer */}
+        <form
+          onSubmit={handleInviteSubmit}
+          className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 max-w-xl"
+        >
+          <div className="relative flex-1">
+            <KeyRound className="w-3.5 h-3.5 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={inviteCodeInput}
+              onChange={(e) => setInviteCodeInput(e.target.value)}
+              placeholder="Arkadaş davet kodu veya linki yapıştırın (Örn: OKUR-KAFKA)"
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-background border border-border text-xs focus:outline-none focus:border-[#B85D3B]"
+            />
+          </div>
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-xl bg-[#5C6B57] hover:bg-[#4A5846] text-[#F6F1E7] text-xs font-bold shrink-0 transition-all"
+          >
+            Davetle Kitap Ekle
+          </button>
+        </form>
+      </div>
+
+      {inviteFeedback && (
+        <div
+          className={`px-4 py-3 rounded-2xl border text-xs font-semibold flex items-center justify-between ${
+            inviteFeedback.type === "ok"
+              ? "bg-[#5C6B57]/15 border-[#5C6B57]/40 text-[#5C6B57]"
+              : "bg-[#B85D3B]/15 border-[#B85D3B]/40 text-[#B85D3B]"
+          }`}
+        >
+          <span>{inviteFeedback.msg}</span>
+          <button
+            onClick={() => setInviteFeedback(null)}
+            className="text-muted hover:text-foreground ml-4"
+          >
+            Kapat
+          </button>
+        </div>
+      )}
+
+      {/* File Upload Dropzone Modal with 3 Visibility Options */}
       {showUploadModal && (
-        <div className="p-6 rounded-3xl bg-surface border-2 border-dashed border-indigo-500/50 space-y-4">
+        <div className="p-6 rounded-3xl bg-surface border-2 border-dashed border-[#B85D3B]/50 space-y-5">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-base">
-                Kütüphaneye PDF veya E-Kitap Yükle
+              <h3 className="font-serif font-bold text-base">
+                Kütüphaneye PDF veya E-Kitap Yükle &amp; Paylaşım Ayarı Seç
               </h3>
               <p className="text-xs text-muted">
                 PDF sayfaları ve EPUB bölümleri otomatik olarak temiz
-                paragraflara ve kelime dizilerine dönüştürülerek RSVP ve Magic
-                Pacer motoruna bağlanır.
+                paragraflara ve kelime dizilerine dönüştürülür.
               </p>
             </div>
             <button
               onClick={() => setShowUploadModal(false)}
-              className="text-xs text-muted hover:text-foreground"
+              className="px-2.5 py-1 rounded-lg bg-background border border-border text-xs font-semibold text-muted hover:text-foreground"
             >
               Kapat
             </button>
+          </div>
+
+          {/* 3 Visibility Selector Cards before uploading */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted block">
+              Kitap Görünürlük &amp; Paylaşım Seçeneği
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {VISIBILITY_OPTIONS.map((opt) => {
+                const Icon = opt.icon;
+                const active = uploadVisibility === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setUploadVisibility(opt.id)}
+                    className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${
+                      active
+                        ? "bg-[#B85D3B]/15 border-[#B85D3B] shadow-sm"
+                        : "bg-background/70 border-border hover:border-[#B85D3B]/40"
+                    }`}
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                        active
+                          ? "bg-[#B85D3B] text-[#F6F1E7]"
+                          : "bg-surface border border-border text-muted"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-foreground">
+                        {opt.label}
+                      </div>
+                      <div className="text-[11px] text-muted mt-0.5 leading-snug">
+                        {opt.desc}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -1111,24 +1776,24 @@ function LibraryAndReaderContent() {
               onDrop={handleDrop}
               className={`flex-1 w-full cursor-pointer p-8 rounded-2xl border transition-all flex flex-col items-center justify-center text-center gap-2.5 ${
                 isDragging
-                  ? "bg-indigo-500/20 border-indigo-500 scale-[1.01]"
-                  : "bg-surface-elevated hover:bg-indigo-500/10 border-border hover:border-indigo-500/40"
+                  ? "bg-[#B85D3B]/20 border-[#B85D3B] scale-[1.01]"
+                  : "bg-background hover:bg-[#B85D3B]/10 border-border hover:border-[#B85D3B]/40"
               }`}
             >
-              <Upload className="w-8 h-8 text-indigo-400" />
-              <div className="text-sm font-semibold">
+              <Upload className="w-8 h-8 text-[#B85D3B]" />
+              <div className="text-sm font-serif font-bold">
                 {isParsingFile
                   ? parsingStatus || "Dosya Dönüştürülüyor..."
                   : ".pdf, .epub, .txt veya .md Dosyası Seçin / Sürükleyin"}
               </div>
               <div className="flex items-center gap-2 text-[11px] text-muted">
-                <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-400 font-semibold">
+                <span className="px-2 py-0.5 rounded bg-[#B85D3B]/15 text-[#B85D3B] font-semibold">
                   PDF
                 </span>
-                <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-400 font-semibold">
+                <span className="px-2 py-0.5 rounded bg-[#5C6B57]/15 text-[#5C6B57] font-semibold">
                   EPUB
                 </span>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold">
+                <span className="px-2 py-0.5 rounded bg-surface border border-border text-foreground font-semibold">
                   TXT / MD
                 </span>
                 <span>sayfa numaraları ve tirelemeler otomatik temizlenir</span>
@@ -1162,7 +1827,7 @@ function LibraryAndReaderContent() {
                   );
                   await processUploadedFile(samplePdf);
                 }}
-                className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 text-xs font-semibold transition-all"
+                className="px-3 py-1.5 rounded-xl bg-[#B85D3B]/15 hover:bg-[#B85D3B]/25 border border-[#B85D3B]/30 text-[#B85D3B] text-xs font-semibold transition-all"
               >
                 Örnek PDF Dönüştür (.pdf)
               </button>
@@ -1177,7 +1842,7 @@ function LibraryAndReaderContent() {
                   });
                   await processUploadedFile(sampleMd);
                 }}
-                className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-semibold transition-all"
+                className="px-3 py-1.5 rounded-xl bg-[#5C6B57]/15 hover:bg-[#5C6B57]/25 border border-[#5C6B57]/30 text-[#5C6B57] text-xs font-semibold transition-all"
               >
                 Örnek Markdown Dönüştür (.md)
               </button>
@@ -1185,7 +1850,7 @@ function LibraryAndReaderContent() {
           </div>
 
           {uploadError && (
-            <p className="text-xs text-rose-400 font-medium">{uploadError}</p>
+            <p className="text-xs text-[#B85D3B] font-medium">{uploadError}</p>
           )}
         </div>
       )}
@@ -1198,7 +1863,7 @@ function LibraryAndReaderContent() {
             onClick={() => setSelectedCategory(cat)}
             className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all shrink-0 ${
               selectedCategory === cat
-                ? "bg-indigo-600 border-indigo-500 text-white shadow-sm"
+                ? "bg-[#B85D3B] border-[#B85D3B] text-[#F6F1E7] shadow-sm"
                 : "bg-surface border-border text-muted hover:text-foreground"
             }`}
           >
@@ -1220,24 +1885,38 @@ function LibraryAndReaderContent() {
             1,
             Math.ceil(book.word_count / Math.max(150, user.current_wpm))
           );
+          const visibility: BookVisibility =
+            book.visibility || (book.is_custom ? "private" : "public");
+          const shareCode =
+            book.share_code ||
+            `OKUR-${book.id
+              .replace(/[^a-zA-Z0-9]/g, "")
+              .slice(-5)
+              .toUpperCase()}`;
+          const alreadyInMyLibrary = books.some((b) => b.id === book.id);
 
           return (
             <div
               key={book.id}
-              className="p-6 rounded-3xl bg-surface border border-border hover:border-indigo-500/40 transition-all flex flex-col justify-between gap-5 shadow-sm"
+              className="p-6 rounded-3xl bg-surface border border-border hover:border-[#B85D3B]/45 transition-all flex flex-col justify-between gap-5 shadow-sm"
             >
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400">
+                      <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-[#B85D3B]/15 text-[#B85D3B]">
                         {book.category}
                       </span>
                       <span className="text-[11px] text-muted font-medium">
                         • {book.difficulty_level} Seviye
                       </span>
+                      {book.owner_name && (
+                        <span className="text-[11px] text-[#5C6B57] font-semibold">
+                          • Paylaşan: {book.owner_name}
+                        </span>
+                      )}
                     </div>
-                    <h2 className="text-xl font-bold leading-snug">
+                    <h2 className="text-xl font-serif font-bold leading-snug">
                       {book.title}
                     </h2>
                     <p className="text-xs text-muted">{book.author}</p>
@@ -1245,7 +1924,7 @@ function LibraryAndReaderContent() {
 
                   {/* Book Cover Badge */}
                   <div
-                    className={`w-14 h-20 rounded-2xl bg-gradient-to-br ${book.cover_gradient} flex flex-col items-center justify-center text-white shadow-lg shrink-0`}
+                    className={`w-14 h-20 rounded-2xl bg-gradient-to-br ${book.cover_gradient} flex flex-col items-center justify-center text-[#F6F1E7] shadow-md shrink-0`}
                   >
                     <BookOpen className="w-6 h-6" />
                   </div>
@@ -1254,6 +1933,68 @@ function LibraryAndReaderContent() {
                 <p className="text-xs text-muted leading-relaxed">
                   {book.summary}
                 </p>
+
+                {/* 3 Visibility Selector Bar on Book Card */}
+                {alreadyInMyLibrary && (
+                  <div className="p-3 rounded-2xl bg-background/80 border border-border space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
+                        Paylaşım &amp; Görünürlük:
+                      </span>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {VISIBILITY_OPTIONS.map((opt) => {
+                          const Icon = opt.icon;
+                          const isSelected = visibility === opt.id;
+                          return (
+                            <button
+                              key={opt.id}
+                              type="button"
+                              onClick={() =>
+                                updateBookVisibility(book.id, opt.id)
+                              }
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-all ${
+                                isSelected
+                                  ? "bg-[#B85D3B] text-[#F6F1E7] shadow-sm"
+                                  : "bg-surface text-muted hover:text-foreground border border-border"
+                              }`}
+                            >
+                              <Icon className="w-3 h-3" />
+                              <span>{opt.shortLabel}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {(visibility === "friends" || visibility === "public") && (
+                      <div className="pt-1.5 border-t border-border/60 flex items-center justify-between gap-2 text-xs">
+                        <div className="truncate text-[11px] text-muted">
+                          Davet Kodu:{" "}
+                          <strong className="font-mono text-foreground">
+                            {shareCode}
+                          </strong>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyInviteLink(book)}
+                          className="px-2.5 py-1 rounded-lg bg-[#5C6B57]/15 hover:bg-[#5C6B57] text-[#5C6B57] hover:text-[#F6F1E7] border border-[#5C6B57]/30 text-[11px] font-bold flex items-center gap-1 shrink-0 transition-all"
+                        >
+                          {copiedShareId === book.id ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              <span>Davet Linki Kopyalandı</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Davet Linkini Kopyala</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Metadata & Progress Bar */}
                 <div className="space-y-2 pt-1">
@@ -1274,19 +2015,37 @@ function LibraryAndReaderContent() {
                   </div>
                   <div className="h-1.5 w-full rounded-full bg-surface-elevated overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all"
+                      className="h-full bg-[#B85D3B] transition-all"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
                 </div>
               </div>
 
-              {/* 3 Mode Launch Buttons */}
+              {/* 3 Mode Launch Buttons (or Import + Read if in Discover tab) */}
               <div className="pt-3 border-t border-border/60 flex items-center justify-between gap-2 flex-wrap">
+                {!alreadyInMyLibrary && (
+                  <button
+                    onClick={() => {
+                      const imported = importBookByInviteOrCommunity(book.id);
+                      if (imported.ok) {
+                        setInviteFeedback({
+                          type: "ok",
+                          msg: imported.message,
+                        });
+                      }
+                    }}
+                    className="w-full mb-2 py-2 px-3 rounded-xl bg-[#5C6B57] hover:bg-[#4A5846] text-[#F6F1E7] text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Kendi OkurLab Kütüphaneme Ekle ({shareCode})</span>
+                  </button>
+                )}
+
                 <div className="grid grid-cols-3 gap-2 flex-1">
                   <button
                     onClick={() => handleOpenBook(book.id, "standard")}
-                    className="py-2.5 px-3 rounded-xl bg-surface-elevated hover:bg-indigo-500/10 border border-border hover:border-indigo-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                    className="py-2.5 px-3 rounded-xl bg-surface-elevated hover:bg-[#B85D3B]/10 border border-border hover:border-[#B85D3B]/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
                   >
                     <BookOpen className="w-3.5 h-3.5 text-muted" />
                     <span>Serbest Okuma</span>
@@ -1294,7 +2053,7 @@ function LibraryAndReaderContent() {
 
                   <button
                     onClick={() => handleOpenBook(book.id, "pacer")}
-                    className="py-2.5 px-3 rounded-xl bg-indigo-600/15 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                    className="py-2.5 px-3 rounded-xl bg-[#B85D3B]/15 hover:bg-[#B85D3B] text-[#B85D3B] hover:text-[#F6F1E7] border border-[#B85D3B]/35 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     <span>Pacer (Odak)</span>
@@ -1302,17 +2061,17 @@ function LibraryAndReaderContent() {
 
                   <button
                     onClick={() => handleOpenBook(book.id, "rsvp")}
-                    className="py-2.5 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                    className="py-2.5 px-3 rounded-xl bg-[#5C6B57]/15 hover:bg-[#5C6B57] text-[#5C6B57] hover:text-[#F6F1E7] border border-[#5C6B57]/35 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     <span>RSVP</span>
                   </button>
                 </div>
 
-                {book.is_custom && (
+                {book.is_custom && alreadyInMyLibrary && (
                   <button
                     onClick={() => deleteCustomBook(book.id)}
-                    className="p-2.5 rounded-xl bg-surface-elevated hover:bg-rose-500/15 text-muted hover:text-rose-400 border border-border transition-colors"
+                    className="p-2.5 rounded-xl bg-surface-elevated hover:bg-[#B85D3B]/15 text-muted hover:text-[#B85D3B] border border-border transition-colors"
                     title="Kitabı Kaldır"
                   >
                     <Trash2 className="w-4 h-4" />

@@ -6,6 +6,8 @@ export type ReadingMode = "standard" | "rsvp" | "pacer";
 
 export type FontFamily = "sans" | "serif" | "mono";
 
+export type BookVisibility = "private" | "friends" | "public";
+
 export interface ComprehensionQuestion {
   id: string;
   book_id: string;
@@ -21,6 +23,11 @@ export interface BookNote {
   selected_text?: string;
   content: string;
   created_at: string;
+  author_name?: string;
+  author_wpm?: number;
+  type?: "highlight" | "note";
+  is_public?: boolean;
+  likes_count?: number;
 }
 
 export interface Book {
@@ -35,6 +42,52 @@ export interface Book {
   content: string[]; // Array of paragraphs
   questions?: ComprehensionQuestion[];
   is_custom?: boolean;
+  visibility?: BookVisibility;
+  share_code?: string;
+  owner_id?: string;
+  owner_name?: string;
+}
+
+export interface CommunityComment {
+  id: string;
+  author_name: string;
+  content: string;
+  created_at: string;
+}
+
+export interface CommunityReview {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_avatar?: string;
+  book_id: string;
+  book_title: string;
+  book_author: string;
+  achieved_wpm: number;
+  rating: number; // 1 to 5
+  review_text: string;
+  likes: number;
+  liked_by_me?: boolean;
+  comments: CommunityComment[];
+  created_at: string;
+}
+
+export interface CommunityQuotePost {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_wpm: number;
+  book_id: string;
+  book_title: string;
+  book_author: string;
+  quote_text: string;
+  word_index: number;
+  note_comment?: string;
+  highlight_count: number;
+  likes: number;
+  liked_by_me?: boolean;
+  comments: CommunityComment[];
+  created_at: string;
 }
 
 export interface ExerciseLog {
@@ -87,4 +140,5 @@ export interface UserProfile {
   comprehension_rate: number;
   streak_days: number;
   created_at: string;
+  auth_provider?: "email" | "google" | "guest";
 }
