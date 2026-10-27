@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Sparkles,
   TrendingUp,
+  Crosshair,
 } from "lucide-react";
 import {
   getORPParts,
@@ -61,6 +62,7 @@ export function RsvpEngine({
   );
   const [wpm, setWpm] = useState(initialWpm);
   const [chunkSize, setChunkSize] = useState<1 | 2 | 3>(1);
+  const [alignMode, setAlignMode] = useState<"fovea" | "center">("fovea");
   const [isPlaying, setIsPlaying] = useState(false);
   const [punctuationPause, setPunctuationPause] = useState(true);
   const [completedBanner, setCompletedBanner] = useState(false);
@@ -374,7 +376,7 @@ export function RsvpEngine({
       </div>
 
       {/* Main Ocula RSVP Optical HUD Viewport */}
-      <div className="relative rounded-3xl bg-surface border-2 border-indigo-500/30 overflow-hidden shadow-2xl">
+      <div className="relative rounded-3xl bg-surface border-2 border-indigo-500/35 overflow-hidden shadow-2xl">
         {/* Top subtle progress bar */}
         <div className="h-1.5 w-full bg-surface-elevated">
           <div
@@ -383,73 +385,120 @@ export function RsvpEngine({
           />
         </div>
 
-        {/* Focal Reticle Guides & Optical Stage */}
-        <div className="relative h-68 sm:h-76 py-8 flex flex-col items-center justify-center px-6 select-none overflow-hidden">
-          {/* Ambient radial glow centered on the ORP fovea lock */}
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(244,63,94,0.07),rgba(99,102,241,0.04)_45%,transparent_70%)]" />
-
-          {/* Top HUD Telemetry Bar */}
-          <div className="absolute top-3 inset-x-6 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted font-medium tabular-nums">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border text-indigo-400 font-semibold">
-                OCULA FOVEA LOCK • {wpm} WPM
+        {/* Dedicated HUD Header Bar (Non-overlapping) */}
+        <div className="px-5 py-3 bg-surface-elevated/55 border-b border-border/70 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted font-medium tabular-nums">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2.5 py-1 rounded-full bg-surface border border-indigo-500/30 text-indigo-400 font-bold flex items-center gap-1.5">
+              <Crosshair className="w-3 h-3 text-rose-500" />
+              <span>OCULA FOVEA LOCK • {wpm} WPM</span>
+            </span>
+            {autoRampEnabled && (
+              <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" />
+                <span>Auto-Ramp (+10 WPM)</span>
               </span>
-              {autoRampEnabled && (
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" />
-                  <span>Auto-Ramp Aktif (+10 WPM)</span>
-                </span>
-              )}
-              {rampNotification && (
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold animate-pulse">
-                  ⚡ Hız İvmesi: {rampNotification.from} &rarr;{" "}
-                  {rampNotification.to} WPM
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {lastSavedToast && (
-                <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-semibold">
-                  {lastSavedToast}
-                </span>
-              )}
-              <span>
-                GRUP: <strong className="text-foreground">{chunkSize} KELİME</strong>
+            )}
+            {rampNotification && (
+              <span className="px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold animate-pulse">
+                ⚡ Hız İvmesi: {rampNotification.from} &rarr;{" "}
+                {rampNotification.to} WPM
               </span>
-            </div>
+            )}
           </div>
 
-          {/* Top Horizontal Optical Reticle Bar with Tick Marks */}
-          <div className="w-full max-w-xl border-t border-border relative flex justify-between px-8">
-            <span className="w-px h-2 bg-border -top-1 relative" />
-            <span className="w-px h-2 bg-border -top-1 relative" />
-            <div className="absolute left-1/2 -translate-x-1/2 -top-1.5 w-0.5 h-5 bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
-            <span className="w-px h-2 bg-border -top-1 relative" />
-            <span className="w-px h-2 bg-border -top-1 relative" />
+          <div className="flex flex-wrap items-center gap-2">
+            {lastSavedToast && (
+              <span className="px-2.5 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-semibold">
+                {lastSavedToast}
+              </span>
+            )}
+            {/* Alignment Axis Switcher: Fovea ORP Lock vs Symmetric Center */}
+            <div className="flex items-center rounded-lg bg-surface p-0.5 border border-border">
+              <button
+                type="button"
+                onClick={() => setAlignMode("fovea")}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors ${
+                  alignMode === "fovea"
+                    ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                    : "text-muted hover:text-foreground"
+                }`}
+                title="Kırmızı ORP harfini tam merkezdeki dikey lazer eksenine kilitler"
+              >
+                ORP Kilit
+              </button>
+              <button
+                type="button"
+                onClick={() => setAlignMode("center")}
+                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors ${
+                  alignMode === "center"
+                    ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
+                    : "text-muted hover:text-foreground"
+                }`}
+                title="Kelimenin tamamını geometrik olarak ekran ortasına hizalar"
+              >
+                Simetrik Merkez
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Dedicated Optical Stage with True Fixed Height & Precision Reticle */}
+        <div className="relative h-[240px] sm:h-[270px] flex flex-col items-center justify-between py-7 px-4 sm:px-8 select-none overflow-hidden">
+          {/* Ambient radial glow centered at 50% 50% */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(244,63,94,0.08),rgba(99,102,241,0.04)_45%,transparent_72%)]" />
+
+          {/* Continuous Vertical & Horizontal Optical Crosshair Axis Guides */}
+          <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 inset-y-7 w-px bg-gradient-to-b from-rose-500/45 via-rose-500/10 to-rose-500/45" />
+          <div className="pointer-events-none absolute inset-x-10 top-1/2 -translate-y-1/2 h-px bg-indigo-500/10" />
+
+          {/* Top Horizontal Optical Reticle Rail */}
+          <div className="w-full max-w-2xl relative border-t border-border/90 h-3">
+            <span className="absolute left-[15%] -top-1 w-px h-2 bg-border" />
+            <span className="absolute left-[32.5%] -top-1 w-px h-2 bg-border" />
+            {/* Center Top Laser Notch */}
+            <span className="absolute left-1/2 -translate-x-1/2 -top-1.5 w-0.5 h-4 bg-rose-500 shadow-[0_0_10px_#f43f5e]" />
+            <span className="absolute left-[67.5%] -top-1 w-px h-2 bg-border" />
+            <span className="absolute left-[85%] -top-1 w-px h-2 bg-border" />
           </div>
 
-          {/* Word Display Stage */}
+          {/* Center Word Display Stage (100% Vertically & Horizontally Centered) */}
           <div
-            className={`my-11 w-full flex items-center justify-center relative z-10 ${fontClass}`}
+            className={`w-full flex-1 flex items-center justify-center relative z-10 ${fontClass}`}
           >
-            {chunkSize === 1 ? (
-              /* Single-word ORP precision alignment: keeps ORP red character locked at center */
-              <div className="w-full max-w-2xl grid grid-cols-[1fr_auto_1fr] items-baseline text-3xl sm:text-5xl md:text-6xl font-bold tracking-wide">
-                <span className="text-right text-foreground">
+            {alignMode === "fovea" ? (
+              /* Precision 3-Column ORP Lock: Red ORP character is locked at exact 50% center crosshair */
+              <div
+                className={`w-full max-w-4xl grid grid-cols-[1fr_auto_1fr] items-baseline whitespace-nowrap font-bold leading-none ${
+                  currentChunkText.length > 22
+                    ? "text-xl sm:text-3xl md:text-4xl"
+                    : currentChunkText.length > 14
+                    ? "text-2xl sm:text-4xl md:text-5xl"
+                    : "text-3xl sm:text-5xl md:text-6xl"
+                }`}
+              >
+                <span className="text-right text-foreground justify-self-end overflow-hidden">
                   {orp.prefix}
                 </span>
-                <span className="text-rose-500 font-extrabold px-[1px] drop-shadow-[0_0_12px_rgba(244,63,94,0.35)] underline decoration-rose-500/50 decoration-2 underline-offset-8">
+                <span className="text-center text-rose-500 font-black px-[1px] drop-shadow-[0_0_14px_rgba(244,63,94,0.45)] underline decoration-rose-500/70 decoration-2 underline-offset-8">
                   {orp.orpChar}
                 </span>
-                <span className="text-left text-foreground">
+                <span className="text-left text-foreground justify-self-start overflow-hidden">
                   {orp.suffix}
                 </span>
               </div>
             ) : (
-              /* Multi-word group display with ORP highlight */
-              <div className="text-center text-2xl sm:text-4xl md:text-5xl font-bold tracking-wide px-4">
+              /* Symmetric Geometric Center: Whole word/chunk is centered at 50% with ORP letter highlighted */
+              <div
+                className={`w-full max-w-4xl flex items-baseline justify-center whitespace-nowrap font-bold leading-none text-center ${
+                  currentChunkText.length > 22
+                    ? "text-xl sm:text-3xl md:text-4xl"
+                    : currentChunkText.length > 14
+                    ? "text-2xl sm:text-4xl md:text-5xl"
+                    : "text-3xl sm:text-5xl md:text-6xl"
+                }`}
+              >
                 <span className="text-foreground">{orp.prefix}</span>
-                <span className="text-rose-500 font-extrabold drop-shadow-[0_0_12px_rgba(244,63,94,0.35)]">
+                <span className="text-rose-500 font-black px-[1px] drop-shadow-[0_0_14px_rgba(244,63,94,0.45)] underline decoration-rose-500/70 decoration-2 underline-offset-8">
                   {orp.orpChar}
                 </span>
                 <span className="text-foreground">{orp.suffix}</span>
@@ -457,21 +506,45 @@ export function RsvpEngine({
             )}
           </div>
 
-          {/* Bottom Horizontal Optical Reticle Bar with Tick Marks */}
-          <div className="w-full max-w-xl border-b border-border relative flex justify-between px-8">
-            <span className="w-px h-2 bg-border -bottom-1 relative" />
-            <span className="w-px h-2 bg-border -bottom-1 relative" />
-            <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-0.5 h-5 bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
-            <span className="w-px h-2 bg-border -bottom-1 relative" />
-            <span className="w-px h-2 bg-border -bottom-1 relative" />
+          {/* Bottom Horizontal Optical Reticle Rail */}
+          <div className="w-full max-w-2xl relative border-b border-border/90 h-3">
+            <span className="absolute left-[15%] -bottom-1 w-px h-2 bg-border" />
+            <span className="absolute left-[32.5%] -bottom-1 w-px h-2 bg-border" />
+            {/* Center Bottom Laser Notch */}
+            <span className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-0.5 h-4 bg-rose-500 shadow-[0_0_10px_#f43f5e]" />
+            <span className="absolute left-[67.5%] -bottom-1 w-px h-2 bg-border" />
+            <span className="absolute left-[85%] -bottom-1 w-px h-2 bg-border" />
           </div>
+        </div>
 
-          {/* Subtle status overlay */}
-          <div className="absolute bottom-3 inset-x-6 flex items-center justify-between text-xs text-muted tabular-nums">
+        {/* Interactive Word Scrubber & Telemetry Status Bar */}
+        <div className="px-6 py-3 bg-surface-elevated/45 border-t border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted tabular-nums">
+          <div className="flex items-center gap-2 shrink-0">
             <span>
               Kelime:{" "}
               <strong className="text-foreground">{currentIndex + 1}</strong> /{" "}
               {totalWords} (%{progressPercent})
+            </span>
+          </div>
+
+          {/* Interactive Scrubber Slider */}
+          <div className="flex-1 max-w-md flex items-center gap-2">
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, totalWords - 1)}
+              value={currentIndex}
+              onChange={(e) => {
+                setCurrentIndex(Number(e.target.value));
+              }}
+              className="w-full accent-rose-500 cursor-pointer h-1.5 rounded-lg"
+              title="Kelime konumunu kaydır"
+            />
+          </div>
+
+          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+            <span>
+              Grup: <strong className="text-foreground">{chunkSize} Kelime</strong>
             </span>
             <span>
               Tahmini Kalan:{" "}

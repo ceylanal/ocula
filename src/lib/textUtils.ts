@@ -15,18 +15,36 @@ export function getORPParts(text: string): ORPParts {
   }
 
   const len = clean.length;
-  let orpIndex = 0;
+  // Center on the optical middle character so long Turkish words and multi-word groups stay balanced around the center reticle
+  let orpIndex = Math.floor((len - 1) * 0.45);
 
   if (len <= 1) {
     orpIndex = 0;
-  } else if (len >= 2 && len <= 5) {
+  } else if (len <= 3) {
     orpIndex = 1;
-  } else if (len >= 6 && len <= 9) {
-    orpIndex = 2;
-  } else if (len >= 10 && len <= 13) {
-    orpIndex = 3;
-  } else {
-    orpIndex = Math.floor(len * 0.3);
+  }
+
+  // Ensure the focal character is never a whitespace or punctuation mark if a letter is adjacent
+  const isLetterOrDigit = (ch: string) =>
+    /[a-zA-Z0-9çğıöşüÇĞİÖŞÜ]/.test(ch);
+
+  if (!isLetterOrDigit(clean.charAt(orpIndex))) {
+    for (let offset = 1; offset < len; offset++) {
+      if (
+        orpIndex - offset >= 0 &&
+        isLetterOrDigit(clean.charAt(orpIndex - offset))
+      ) {
+        orpIndex = orpIndex - offset;
+        break;
+      }
+      if (
+        orpIndex + offset < len &&
+        isLetterOrDigit(clean.charAt(orpIndex + offset))
+      ) {
+        orpIndex = orpIndex + offset;
+        break;
+      }
+    }
   }
 
   return {
