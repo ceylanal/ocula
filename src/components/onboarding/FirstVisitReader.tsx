@@ -10,7 +10,7 @@ const PARAGRAPHS = [
   "Bu sayfa bir tanıtım değil, ilk alıştırman. Aşağı kaydırdıkça gözünün durduğu paragraf netleşir, çevresi hafifçe solar. Böylece satırı kaybetmeden, acele etmeden ilerlersin.",
   "Yazı çok küçük ya da ekran çok parlaksa üstteki düğmelerle boyutu büyütebilir, geceye geçebilirsin. Okuduğunu anlaman kadar, gözünün yorulmaması da önemli.",
   "OkurLab kendi kitaplarını okuduğun bir yer; asıl işi de RSVP. Kelimeler ekranın ortasında tek tek akar, gözün satırlar arasında gezinmek zorunda kalmaz, hız artarken kaybolmazsın. PDF, EPUB ya da düz metin dosyanı yüklersin. İstersen bir vurgu bloğu kelimeleri senin için sırayla işaretler, istersen serbestçe okursun.",
-  "Hızın yavaş yavaş artsın diye kademeli hızlanma da var: birkaç dakikada bir hız biraz yükselir, sen fark etmeden alışırsın. Cümleleri sesli dinleyebilirsin; ses modeli bir kez indirildikten sonra internet olmadan çalışır.",
+  "Hızın yavaş yavaş artsın diye kademeli hızlanma da var: birkaç dakikada bir hız biraz yükselir, sen fark etmeden alışırsın. Cümleleri sesli dinleyebilirsin; ses bir kez indirildikten sonra internet olmadan çalışır.",
   "Hız tek başına bir şey söylemez. Ölçüm testinde okuduktan sonra birkaç soru sorulur; hızını, anladığınla birlikte görürsün.",
   "Hazır olduğunda bir kitapla başla.",
 ];

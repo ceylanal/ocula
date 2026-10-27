@@ -73,7 +73,7 @@ export function VoiceModelManager() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="text-xs font-bold uppercase tracking-wider text-muted">
-          Çevrimdışı Sesli Okuma Modelleri
+          Çevrimdışı sesler
         </div>
         {estimate && (
           <span className="inline-flex items-center gap-1 text-[11px] text-muted">
@@ -85,7 +85,7 @@ export function VoiceModelManager() {
 
       {!supported && (
         <p className="text-[11px] text-muted leading-relaxed">
-          Bu tarayıcı yerel nöral sesi desteklemiyor; sesli okuma tarayıcının kendi
+          Bu tarayıcı çevrimdışı sesi desteklemiyor; sesli okuma cihazın kendi
           sesine geçer.
         </p>
       )}
@@ -127,7 +127,7 @@ export function VoiceModelManager() {
                 <button
                   onClick={() => handleDelete(voice.id)}
                   disabled={busy !== null}
-                  title="Modeli cihazdan sil"
+                  title="Sesi cihazdan sil"
                   className="px-2.5 py-1.5 rounded-xl bg-background border border-border text-xs font-semibold text-muted hover:text-[#B85D3B] disabled:opacity-50 flex items-center gap-1 shrink-0"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -137,7 +137,7 @@ export function VoiceModelManager() {
                 <button
                   onClick={() => handleDownload(voice.id)}
                   disabled={busy !== null || !supported || !online}
-                  title={online ? "Modeli indir" : "İndirmek için çevrimiçi olmalısın"}
+                  title={online ? "Sesi indir" : "İndirmek için çevrimiçi olmalısın"}
                   className="px-2.5 py-1.5 rounded-xl bg-[#B85D3B] text-[#F6F1E7] text-xs font-bold disabled:opacity-50 flex items-center gap-1 shrink-0"
                 >
                   {isBusy ? (
@@ -159,7 +159,7 @@ export function VoiceModelManager() {
         </p>
       )}
       <p className="text-[11px] text-muted leading-relaxed">
-        İndirilen modeller yalnızca bu cihazda saklanır ve internet olmadan çalışır.
+        İndirilen sesler yalnızca bu cihazda saklanır ve internet olmadan çalışır.
         Silmek, o sese ilk kullanımda yeniden indirme gerektirir.
       </p>
     </div>

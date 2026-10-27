@@ -20,19 +20,19 @@ export interface PiperVoiceOption {
 export const PIPER_VOICES: PiperVoiceOption[] = [
   {
     id: "tr_TR-dfki-medium",
-    label: "Türkçe Nöral (DFKI • Doğal)",
+    label: "Türkçe, doğal",
     lang: "tr-TR",
     sizeMb: 61,
   },
   {
     id: "tr_TR-fahrettin-medium",
-    label: "Türkçe Nöral (Fahrettin • Tok)",
+    label: "Türkçe, tok",
     lang: "tr-TR",
     sizeMb: 61,
   },
   {
     id: "en_US-lessac-medium",
-    label: "English Neural (Lessac • Clear)",
+    label: "İngilizce, net",
     lang: "en-US",
     sizeMb: 61,
   },

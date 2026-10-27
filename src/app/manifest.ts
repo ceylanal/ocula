@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "OkurLab — Sıcak Sepya Kitap Stüdyosu & Okuma Laboratuvarı",
     short_name: "OkurLab",
     description:
-      "Uzun süreli kitap okumaya uygun sıcak sepya kağıt dokusu, PDF/EPUB okuyucu, çevrimdışı nöral sesli okuma ve odak pacer laboratuvarı.",
+      "Uzun süreli kitap okumaya uygun sıcak sepya kağıt dokusu, PDF/EPUB okuyucu, çevrimdışı sesli okuma ve odak pacer laboratuvarı.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",

@@ -27,7 +27,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "OkurLab — Sıcak Sepya Kitap Stüdyosu & Kademeli Okuma Laboratuvarı",
   description:
-    "Uzun süreli kitap okumaya uygun sıcak parşömen kağıt dokusu, PDF/EPUB okuyucu, çevrimdışı nöral sesli okuma ve odak pacer laboratuvarı.",
+    "Uzun süreli kitap okumaya uygun sıcak parşömen kağıt dokusu, PDF/EPUB okuyucu, çevrimdışı sesli okuma ve odak pacer laboratuvarı.",
   applicationName: "OkurLab",
   appleWebApp: {
     capable: true,
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "OkurLab — Sıcak Sepya Kitap Stüdyosu & Okuma Laboratuvarı",
     description:
-      "Göz yormayan sıcak sepya kağıt üzerinde PDF/EPUB okuma, Pacer odak bloğu ve çevrimdışı nöral sesli okuma deneyimi.",
+      "Göz yormayan sıcak sepya kağıt üzerinde PDF/EPUB okuma, Pacer odak bloğu ve çevrimdışı sesli okuma deneyimi.",
     type: "website",
   },
 };

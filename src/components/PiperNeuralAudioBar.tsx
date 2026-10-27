@@ -7,7 +7,6 @@ import {
   SkipBack,
   SkipForward,
   Download,
-  Cpu,
   CheckCircle2,
   Sparkles,
   Radio,
@@ -27,7 +26,6 @@ import {
   findSentenceIndexForWord,
   getWordIndexAtProgress,
   isPiperWasmSupported,
-  isVoiceModelCached,
   piperEngine,
   speakWithBrowserFallback,
   wpmToPlaybackRate,
@@ -131,8 +129,6 @@ export function PiperNeuralAudioBar({
   const [isSynthesizingFirst, setIsSynthesizingFirst] =
     useState<boolean>(false);
   const [downloadPercent, setDownloadPercent] = useState<number | null>(null);
-  const [isModelCached, setIsModelCached] = useState<boolean>(false);
-  const [prefetchedCount, setPrefetchedCount] = useState<number>(0);
   const [activeSentenceIdx, setActiveSentenceIdx] = useState<number>(0);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -223,15 +219,11 @@ export function PiperNeuralAudioBar({
     setSelectedVoice(defaultVoice);
   }, [defaultVoice, bookId]);
 
-  // Check if WebAssembly is supported and whether selected voice model is already cached in OPFS/CacheStorage
+  // Tarayıcı çevrimdışı sesi (WebAssembly) desteklemiyorsa cihazın kendi sesine geç
   useEffect(() => {
     if (!isPiperWasmSupported()) {
       setEngineMode("fallback");
-      return;
     }
-    isVoiceModelCached(selectedVoice).then((cached) => {
-      setIsModelCached(cached);
-    });
   }, [selectedVoice]);
 
   // Subscribe to Piper Worker download & model ready events
@@ -244,7 +236,6 @@ export function PiperNeuralAudioBar({
     const unsubReady = piperEngine.onModelReady((voiceId) => {
       if (voiceId === selectedVoice) {
         setDownloadPercent(null);
-        setIsModelCached(true);
       }
     });
     return () => {
@@ -295,7 +286,6 @@ export function PiperNeuralAudioBar({
     prefetchMapRef.current.clear();
     resolvedUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     resolvedUrlsRef.current.clear();
-    setPrefetchedCount(0);
   };
 
   useEffect(() => {
@@ -320,7 +310,6 @@ export function PiperNeuralAudioBar({
       .synthesizeSentenceToWav(sentence.text, voiceId)
       .then((res) => {
         resolvedUrlsRef.current.add(res.blobUrl);
-        setPrefetchedCount((c) => Math.min(2, c + 1));
         return res;
       })
       .catch((err) => {
@@ -337,7 +326,6 @@ export function PiperNeuralAudioBar({
     currentSIdx: number,
     voiceId: PiperVoiceId
   ) => {
-    setPrefetchedCount(0);
     for (let offset = 1; offset <= 2; offset++) {
       const targetIdx = currentSIdx + offset;
       if (targetIdx < sentences.length) {
@@ -404,7 +392,7 @@ export function PiperNeuralAudioBar({
           artist: `${bookAuthor} • ${wpmRef.current} WPM (${wpmToPlaybackRate(
             wpmRef.current
           )}x)`,
-          album: "OkurLab • Piper Neural TTS",
+          album: "OkurLab",
         });
         navigator.mediaSession.playbackState = "playing";
       } catch {
@@ -525,7 +513,7 @@ export function PiperNeuralAudioBar({
       setEngineMode("fallback");
       engineModeRef.current = "fallback";
       setStatusMessage(
-        "Cihazda WASM/Model başlatılamadı, yerleşik ses motoruna (Fallback) geçildi."
+        "Doğal ses bu cihazda başlatılamadı; cihazın kendi sesi kullanılıyor."
       );
       if (isPlayingRef.current) {
         playSentenceAtIndex(sIdx, "fallback", initialWordIdx);
@@ -690,12 +678,12 @@ export function PiperNeuralAudioBar({
             {isPlaying ? (
               <>
                 <Pause className="w-4 h-4 fill-current" />
-                <span>Sesli Okumayı Duraklat</span>
+                <span>Duraklat</span>
               </>
             ) : (
               <>
                 <Volume2 className="w-4 h-4" />
-                <span>Sesli Oku (Piper Neural AI)</span>
+                <span>Sesli Oku</span>
               </>
             )}
           </button>
@@ -734,7 +722,7 @@ export function PiperNeuralAudioBar({
               }
             }}
             className="px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold text-foreground focus:outline-none focus:border-[#B85D3B]"
-            title="Piper Nöral Ses Modeli Seçin"
+            title="Ses seç"
           >
             {PIPER_VOICES.map((v) => (
               <option key={v.id} value={v.id}>
@@ -756,17 +744,6 @@ export function PiperNeuralAudioBar({
               <LocateFixed className="w-3.5 h-3.5 text-[#B85D3B]" />
               <span>Satırı Ortala</span>
             </button>
-          )}
-
-          {engineMode === "piper" && (
-            <span className="px-2.5 py-1.5 rounded-xl bg-[#5C6B57]/15 border border-[#5C6B57]/30 text-[#5C6B57] font-semibold tabular-nums flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5" />
-              <span>
-                {isModelCached
-                  ? `Hazır • Prefetch: +${prefetchedCount} Cümle`
-                  : "WebAssembly ONNX"}
-              </span>
-            </span>
           )}
 
           <button
@@ -794,13 +771,11 @@ export function PiperNeuralAudioBar({
                 ? "bg-background border-border text-muted hover:text-foreground"
                 : "bg-[#B85D3B]/15 border-[#B85D3B]/40 text-[#B85D3B]"
             }`}
-            title="Piper Nöral WASM motoru ile yerleşik tarayıcı sesi (Fallback) arasında geçiş yap"
+            title="Doğal ses yavaş ya da çalışmıyorsa cihazın kendi sesini kullan"
           >
             <Radio className="w-3.5 h-3.5" />
             <span>
-              {engineMode === "piper"
-                ? "Motor: Piper Nöral"
-                : "Motor: Yerleşik Ses"}
+              {engineMode === "piper" ? "Cihaz sesini kullan" : "Doğal sese dön"}
             </span>
           </button>
         </div>
@@ -886,8 +861,8 @@ export function PiperNeuralAudioBar({
             <span className="font-bold text-[#B85D3B] flex items-center gap-1.5">
               <Download className="w-4 h-4 animate-bounce" />
               <span>
-                Nöral Ses Modeli Cihaza İndiriliyor: %{downloadPercent} — Sadece
-                ilk seferde indirilir (OPFS Önbellek)
+                Ses ilk kullanımda indiriliyor: %{downloadPercent}. Bir kez iner,
+                sonra internet olmadan çalışır.
               </span>
             </span>
 
@@ -906,7 +881,7 @@ export function PiperNeuralAudioBar({
               }}
               className="px-2.5 py-1 rounded-lg bg-background border border-border text-[11px] font-semibold text-foreground hover:border-[#B85D3B]"
             >
-              İnerken Yerleşik Sesle Dinle &rarr;
+              İnerken cihaz sesiyle dinle
             </button>
           </div>
 
@@ -926,7 +901,7 @@ export function PiperNeuralAudioBar({
             <Sparkles className="w-3.5 h-3.5 text-[#B85D3B] shrink-0" />
             <span className="truncate text-foreground font-serif">
               {isSynthesizingFirst
-                ? "1. cümle nöral ağda sentezleniyor (.wav)..."
+                ? "Ses hazırlanıyor…"
                 : statusMessage ||
                   (currentSentence
                     ? `Cümle #${activeSentenceIdx + 1}/${sentences.length}: "${currentSentence.text}"`
@@ -935,7 +910,7 @@ export function PiperNeuralAudioBar({
           </div>
           <span className="text-[11px] text-[#5C6B57] font-semibold shrink-0 tabular-nums flex items-center gap-1">
             <CheckCircle2 className="w-3.5 h-3.5 text-[#5C6B57]" />
-            <span>Sayfa Kaydırma &amp; Odak Senkronize</span>
+            <span>Sayfa sesi takip ediyor</span>
           </span>
         </div>
       )}
