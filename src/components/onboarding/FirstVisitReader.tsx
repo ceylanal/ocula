@@ -9,7 +9,7 @@ import { OkurLabLogo } from "@/components/OkurLabLogo";
 const PARAGRAPHS = [
   "Bu sayfa bir tanıtım değil, ilk alıştırman. Aşağı kaydırdıkça gözünün durduğu paragraf netleşir, çevresi hafifçe solar. Böylece satırı kaybetmeden, acele etmeden ilerlersin.",
   "Yazı çok küçük ya da ekran çok parlaksa üstteki düğmelerle boyutu büyütebilir, geceye geçebilirsin. Okuduğunu anlaman kadar, gözünün yorulmaması da önemli.",
-  "OkurLab kendi kitaplarını okuduğun bir yer. PDF, EPUB ya da düz metin dosyanı yüklersin; baştan sona aynı sakin düzende okursun. İstersen bir vurgu bloğu kelimeleri senin için sırayla işaretler, istersen kelimeler ekranın ortasında tek tek akar.",
+  "OkurLab kendi kitaplarını okuduğun bir yer; asıl işi de RSVP. Kelimeler ekranın ortasında tek tek akar, gözün satırlar arasında gezinmek zorunda kalmaz, hız artarken kaybolmazsın. PDF, EPUB ya da düz metin dosyanı yüklersin. İstersen bir vurgu bloğu kelimeleri senin için sırayla işaretler, istersen serbestçe okursun.",
   "Hızın yavaş yavaş artsın diye kademeli hızlanma da var: birkaç dakikada bir hız biraz yükselir, sen fark etmeden alışırsın. Cümleleri sesli dinleyebilirsin; ses modeli bir kez indirildikten sonra internet olmadan çalışır.",
   "Hız tek başına bir şey söylemez. Ölçüm testinde okuduktan sonra birkaç soru sorulur; hızını, anladığınla birlikte görürsün.",
   "Hazır olduğunda bir kitapla başla.",
@@ -95,7 +95,7 @@ export function FirstVisitReader() {
 
   const sampleBookId = books.find((b) => b.id === lastActiveBookId)?.id ?? books[0]?.id;
   const sampleHref = sampleBookId
-    ? `/library?book=${encodeURIComponent(sampleBookId)}&mode=standard`
+    ? `/library?book=${encodeURIComponent(sampleBookId)}&mode=rsvp`
     : "/library";
 
   return (
@@ -202,7 +202,7 @@ export function FirstVisitReader() {
               onClick={completeOnboarding}
               className={`inline-flex items-center px-6 py-3.5 rounded-xl bg-[#B85D3B] text-[#FBF7EE] font-semibold hover:bg-[#A14D2E] ${focusRing}`}
             >
-              Örnek kitabı aç
+              Örnek kitabı RSVP ile aç
             </Link>
             <p className="text-muted">
               <Link

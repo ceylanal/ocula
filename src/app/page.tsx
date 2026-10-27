@@ -17,7 +17,6 @@ import {
   Sparkles,
   Upload,
   FileText,
-  Play,
   Grid3X3,
   Target,
 } from "lucide-react";
@@ -94,7 +93,7 @@ function ReadingStudio() {
   );
   const bookWpm =
     activeProg?.preferred_wpm ?? readerPrefs.defaultWpm;
-  const savedMode = activeProg?.reading_mode ?? "pacer";
+  const savedMode = activeProg?.reading_mode ?? "rsvp";
   const remainingWords = Math.max(0, totalBookWords - currentWordIdx);
   const estimatedRemainingMinutes = Math.max(
     1,
@@ -271,7 +270,7 @@ function ReadingStudio() {
                       <p className="text-xs sm:text-sm text-muted">
                         {activeBook.author} • Son Mod:{" "}
                         <strong className="text-indigo-400">
-                          {MODE_LABELS[savedMode] || "Pacer"}
+                          {MODE_LABELS[savedMode] || "RSVP Odak"}
                         </strong>
                       </p>
                     </div>
@@ -347,11 +346,11 @@ function ReadingStudio() {
                 {/* Primary CTA: Kaldığın Yerden Devam Et + Mode Quick Links */}
                 <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
                   <Link
-                    href={`/library?book=${activeBook.id}&mode=${savedMode}`}
+                    href={`/library?book=${activeBook.id}&mode=rsvp`}
                     className="flex-1 py-4 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-xl shadow-indigo-600/30 transition-all"
                   >
-                    <Play className="w-5 h-5 fill-current" />
-                    <span>Kaldığın Yerden Devam Et</span>
+                    <Zap className="w-5 h-5 fill-current" />
+                    <span>RSVP ile Devam Et</span>
                     <ArrowRight className="w-4 h-4" />
                   </Link>
 
@@ -365,12 +364,12 @@ function ReadingStudio() {
                       <span>Pacer</span>
                     </Link>
                     <Link
-                      href={`/library?book=${activeBook.id}&mode=rsvp`}
-                      className="flex-1 sm:flex-initial py-4 px-3.5 rounded-2xl bg-surface-elevated hover:bg-rose-500/15 border border-border hover:border-rose-500/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-                      title="RSVP Odak modunda aç"
+                      href={`/library?book=${activeBook.id}&mode=standard`}
+                      className="flex-1 sm:flex-initial py-4 px-3.5 rounded-2xl bg-surface-elevated hover:bg-indigo-500/15 border border-border hover:border-indigo-500/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                      title="Serbest okuma modunda aç"
                     >
-                      <Zap className="w-4 h-4 text-rose-400" />
-                      <span>RSVP</span>
+                      <BookOpen className="w-4 h-4 text-indigo-400" />
+                      <span>Serbest</span>
                     </Link>
                   </div>
                 </div>

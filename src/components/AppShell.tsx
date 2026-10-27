@@ -38,7 +38,7 @@ const NAV_ITEMS = [
   {
     href: "/library",
     label: "Kitaplığım & PDF",
-    sublabel: "Smart Reader • Paylaş & Keşfet",
+    sublabel: "RSVP • Pacer • Paylaş & Keşfet",
     icon: BookOpen,
   },
   {

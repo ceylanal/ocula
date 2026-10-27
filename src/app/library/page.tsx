@@ -80,7 +80,7 @@ function LibraryAndReaderContent() {
   } = useCommunityStore();
 
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
-  const [readingMode, setReadingMode] = useState<ReadingMode>("standard");
+  const [readingMode, setReadingMode] = useState<ReadingMode>("rsvp");
   const [selectedCategory, setSelectedCategory] = useState<string>("Tümü");
   const [catalogTab, setCatalogTab] = useState<"my_books" | "discover">(
     "my_books"
@@ -494,7 +494,7 @@ function LibraryAndReaderContent() {
       importBookByInviteOrCommunity(bookId);
     }
     const saved = readingProgress[bookId];
-    const targetMode = mode || saved?.reading_mode || "pacer";
+    const targetMode = mode || saved?.reading_mode || "rsvp";
     setActiveBookId(bookId);
     setLastActiveBookId(bookId);
     setReadingMode(targetMode);
@@ -570,7 +570,7 @@ function LibraryAndReaderContent() {
       addBook(newBook);
       setShowUploadModal(false);
       setActiveBookId(newBook.id);
-      setReadingMode("pacer");
+      setReadingMode("rsvp");
     } catch (err) {
       console.error(err);
       setUploadError(
@@ -835,22 +835,22 @@ function LibraryAndReaderContent() {
           <div className="flex flex-wrap rounded-xl bg-surface-elevated p-1 border border-border">
             <button
               onClick={() => {
-                setReadingMode("standard");
+                setReadingMode("rsvp");
                 updateReadingProgress(
                   activeBook.id,
                   currentWordIndex,
-                  "standard",
+                  "rsvp",
                   currentWpm
                 );
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                readingMode === "standard"
+                readingMode === "rsvp"
                   ? "bg-[#B85D3B] text-[#F6F1E7] shadow-sm"
-                  : "text-muted hover:text-foreground"
+                  : "text-foreground hover:bg-background/70"
               }`}
             >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Serbest Okuma</span>
+              <Zap className="w-3.5 h-3.5" />
+              <span>RSVP Hızlı Okuma</span>
             </button>
 
             <button
@@ -875,22 +875,22 @@ function LibraryAndReaderContent() {
 
             <button
               onClick={() => {
-                setReadingMode("rsvp");
+                setReadingMode("standard");
                 updateReadingProgress(
                   activeBook.id,
                   currentWordIndex,
-                  "rsvp",
+                  "standard",
                   currentWpm
                 );
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                readingMode === "rsvp"
+                readingMode === "standard"
                   ? "bg-[#B85D3B] text-[#F6F1E7] shadow-sm"
                   : "text-muted hover:text-foreground"
               }`}
             >
-              <Zap className="w-3.5 h-3.5" />
-              <span>RSVP</span>
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Serbest Okuma</span>
             </button>
           </div>
 
@@ -1777,6 +1777,22 @@ function LibraryAndReaderContent() {
 
                 <div className="grid grid-cols-3 gap-2 flex-1">
                   <button
+                    onClick={() => handleOpenBook(book.id, "rsvp")}
+                    className="py-2.5 px-3 rounded-xl bg-[#B85D3B] hover:bg-[#A14D2E] text-[#F6F1E7] border border-[#B85D3B] shadow-sm text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>RSVP ile Oku</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleOpenBook(book.id, "pacer")}
+                    className="py-2.5 px-3 rounded-xl bg-surface-elevated hover:bg-[#B85D3B]/10 border border-border hover:border-[#B85D3B]/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-muted" />
+                    <span>Pacer (Odak)</span>
+                  </button>
+
+                  <button
                     onClick={() => handleOpenBook(book.id, "standard")}
                     className="py-2.5 px-3 rounded-xl bg-surface-elevated hover:bg-[#B85D3B]/10 border border-border hover:border-[#B85D3B]/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
                   >
@@ -1784,21 +1800,6 @@ function LibraryAndReaderContent() {
                     <span>Serbest Okuma</span>
                   </button>
 
-                  <button
-                    onClick={() => handleOpenBook(book.id, "pacer")}
-                    className="py-2.5 px-3 rounded-xl bg-[#B85D3B]/15 hover:bg-[#B85D3B] text-[#B85D3B] hover:text-[#F6F1E7] border border-[#B85D3B]/35 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Pacer (Odak)</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleOpenBook(book.id, "rsvp")}
-                    className="py-2.5 px-3 rounded-xl bg-[#5C6B57]/15 hover:bg-[#5C6B57] text-[#5C6B57] hover:text-[#F6F1E7] border border-[#5C6B57]/35 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>RSVP</span>
-                  </button>
                 </div>
 
                 {book.is_custom && alreadyInMyLibrary && (
