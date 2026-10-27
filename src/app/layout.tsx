@@ -6,13 +6,13 @@ import { AppShell } from "@/components/AppShell";
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin", "latin-ext"],
   variable: "--font-jakarta",
-  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
 const literata = Literata({
   subsets: ["latin", "latin-ext"],
   variable: "--font-literata",
-  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const viewport: Viewport = {
