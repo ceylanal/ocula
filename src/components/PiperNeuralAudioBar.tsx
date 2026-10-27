@@ -39,8 +39,39 @@ import {
  * (asenkron) yapılan çağrı reddedilir. Dokunuş anında sessiz bir ses çalıp öğeyi
  * "açarız"; sonraki programatik çalmalar izinli olur.
  */
-const SILENT_WAV =
-  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+const SILENT_WAV = "data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+/**
+ * iOS Safari, ses hızı 2x'in üstüne çıkınca sesi susturabilir. iOS'ta oynatma hızı 2.0 ile
+ * sınırlanır; yazılı WPM değişmez, yalnızca sesin hızlanması bu eşikte durur.
+ */
+function getMaxPlaybackRate(): number {
+  if (typeof navigator === "undefined") return 3.0;
+  const isIOS =
+    /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  return isIOS ? 2.0 : 3.0;
+}
+
+/** Medya özelliklerini ayarlar; desteklenmeyen değer/tarayıcı uygulamayı çökertmesin. */
+function setMediaRate(audio: HTMLAudioElement, rate: number): void {
+  const safeRate = Math.min(rate, getMaxPlaybackRate());
+  try {
+    audio.defaultPlaybackRate = safeRate;
+    if (Math.abs(audio.playbackRate - safeRate) > 0.01) {
+      audio.playbackRate = safeRate;
+    }
+    audio.preservesPitch = true;
+    const legacy = audio as HTMLAudioElement & {
+      mozPreservesPitch?: boolean;
+      webkitPreservesPitch?: boolean;
+    };
+    legacy.mozPreservesPitch = true;
+    legacy.webkitPreservesPitch = true;
+  } catch (err) {
+    console.warn("Oynatma hızı uygulanamadı:", err);
+  }
+}
 
 interface PiperNeuralAudioBarProps {
   bookId: string;
@@ -235,34 +266,12 @@ export function PiperNeuralAudioBar({
 
   // Yeni kaynak yüklenince bazı tarayıcılar (Safari/mobil) playbackRate'i varsayılana sıfırlar;
   // defaultPlaybackRate'i de ayarlayıp oran sapmışsa düzeltiriz.
-  const applyPlaybackRate = (audio: HTMLAudioElement) => {
-    const rate = wpmToPlaybackRate(wpmRef.current);
-    audio.defaultPlaybackRate = rate;
-    if (Math.abs(audio.playbackRate - rate) > 0.01) {
-      audio.playbackRate = rate;
-    }
-    audio.preservesPitch = true;
-  };
+  const applyPlaybackRate = (audio: HTMLAudioElement) =>
+    setMediaRate(audio, wpmToPlaybackRate(wpmRef.current));
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (audio) {
-      audio.defaultPlaybackRate = playbackRate;
-      audio.playbackRate = playbackRate;
-      audio.preservesPitch = true;
-      (
-        audio as HTMLAudioElement & {
-          mozPreservesPitch?: boolean;
-          webkitPreservesPitch?: boolean;
-        }
-      ).mozPreservesPitch = true;
-      (
-        audio as HTMLAudioElement & {
-          mozPreservesPitch?: boolean;
-          webkitPreservesPitch?: boolean;
-        }
-      ).webkitPreservesPitch = true;
-    }
+    if (audio) setMediaRate(audio, playbackRate);
 
     // If playing in Browser Fallback mode, smoothly apply the new speed from the current word
     if (isPlayingRef.current && engineModeRef.current === "fallback") {
