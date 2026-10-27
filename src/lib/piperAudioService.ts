@@ -7,6 +7,9 @@ export type PiperVoiceId =
   | "tr_TR-fahrettin-medium"
   | "en_US-lessac-medium";
 
+/** Çalışanın model dosyalarını yazdığı önbellek. Eski marka adı, indirilmiş modeller kaybolmasın diye korunur. */
+export const PIPER_MODEL_CACHE = "ocula-piper-models-v1";
+
 export interface PiperVoiceOption {
   id: PiperVoiceId;
   label: string;
@@ -231,7 +234,7 @@ export async function isVoiceModelCached(
 
   try {
     if (typeof caches !== "undefined") {
-      const cache = await caches.open("ocula-piper-models-v1") /* eski ad: mevcut model önbelleğini korumak için değiştirilmedi */;
+      const cache = await caches.open(PIPER_MODEL_CACHE);
       const keys = await cache.keys();
       if (keys.some((req) => req.url.endsWith(fileName))) {
         return true;
@@ -242,6 +245,97 @@ export async function isVoiceModelCached(
   }
 
   return false;
+}
+
+export interface VoiceModelStatus {
+  cached: boolean;
+  /** Bayt cinsinden gerçek boyut; yalnızca OPFS'de bulunduğunda bilinir. */
+  bytes: number | null;
+}
+
+/** Bir sesin yerelde tutulan dosyaları (model ve yapılandırma). */
+export function voiceModelFileNames(voiceId: PiperVoiceId): string[] {
+  return [`${voiceId}.onnx`, `${voiceId}.onnx.json`];
+}
+
+export async function getVoiceModelStatus(
+  voiceId: PiperVoiceId
+): Promise<VoiceModelStatus> {
+  const cached = await isVoiceModelCached(voiceId);
+  if (!cached) return { cached: false, bytes: null };
+
+  try {
+    if (navigator.storage?.getDirectory) {
+      const root = await navigator.storage.getDirectory();
+      const dir = await root.getDirectoryHandle("piper", { create: false });
+      let total = 0;
+      for (const name of voiceModelFileNames(voiceId)) {
+        try {
+          const file = await (await dir.getFileHandle(name)).getFile();
+          total += file.size;
+        } catch {
+          // Dosya yok
+        }
+      }
+      if (total > 0) return { cached: true, bytes: total };
+    }
+  } catch {
+    // OPFS yok
+  }
+  return { cached: true, bytes: null };
+}
+
+/** Sesin modelini hem OPFS'den hem CacheStorage'dan siler. */
+export async function deleteVoiceModel(voiceId: PiperVoiceId): Promise<void> {
+  if (typeof window === "undefined") return;
+  const names = voiceModelFileNames(voiceId);
+
+  try {
+    if (navigator.storage?.getDirectory) {
+      const root = await navigator.storage.getDirectory();
+      const dir = await root.getDirectoryHandle("piper", { create: false });
+      for (const name of names) {
+        try {
+          await dir.removeEntry(name);
+        } catch {
+          // Zaten yok
+        }
+      }
+    }
+  } catch {
+    // OPFS dizini yok
+  }
+
+  try {
+    if (typeof caches !== "undefined") {
+      const cache = await caches.open(PIPER_MODEL_CACHE);
+      const keys = await cache.keys();
+      await Promise.all(
+        keys
+          .filter((req) => names.some((n) => req.url.endsWith(n)))
+          .map((req) => cache.delete(req))
+      );
+    }
+  } catch {
+    // Önbellek erişilemez
+  }
+}
+
+export async function getStorageEstimate(): Promise<{
+  usage: number;
+  quota: number;
+} | null> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
+      const { usage, quota } = await navigator.storage.estimate();
+      if (typeof usage === "number" && typeof quota === "number") {
+        return { usage, quota };
+      }
+    }
+  } catch {
+    // Desteklenmiyor
+  }
+  return null;
 }
 
 interface PendingWorkerRequest {
@@ -258,6 +352,14 @@ class PiperAudioEngineManager {
   private worker: Worker | null = null;
   private requestCounter = 0;
   private pending = new Map<number, PendingWorkerRequest>();
+  private initPending = new Map<
+    number,
+    {
+      resolve: () => void;
+      reject: (err: Error) => void;
+      onProgress?: (prog: ModelDownloadProgress) => void;
+    }
+  >();
   private globalProgressListeners = new Set<
     (prog: ModelDownloadProgress) => void
   >();
@@ -284,12 +386,20 @@ class PiperAudioEngineManager {
         };
         const req = this.pending.get(requestId);
         req?.onProgress?.(prog);
+        this.initPending.get(requestId)?.onProgress?.(prog);
         this.globalProgressListeners.forEach((cb) => cb(prog));
         return;
       }
 
       if (type === "MODEL_CACHED_READY" || type === "MODEL_READY") {
         this.modelReadyListeners.forEach((cb) => cb(data.voiceId));
+        if (type === "MODEL_READY") {
+          const init = this.initPending.get(requestId);
+          if (init) {
+            this.initPending.delete(requestId);
+            init.resolve();
+          }
+        }
         return;
       }
 
@@ -308,6 +418,12 @@ class PiperAudioEngineManager {
       }
 
       if (type === "ERROR") {
+        const init = this.initPending.get(requestId);
+        if (init) {
+          this.initPending.delete(requestId);
+          init.reject(new Error(data.message || "Ses modeli indirilemedi"));
+          return;
+        }
         const req = this.pending.get(requestId);
         if (req) {
           this.pending.delete(requestId);
@@ -322,6 +438,10 @@ class PiperAudioEngineManager {
         req.reject(new Error("Piper Web Worker çalışmayı durdurdu."))
       );
       this.pending.clear();
+      this.initPending.forEach((req) =>
+        req.reject(new Error("Piper Web Worker çalışmayı durdurdu."))
+      );
+      this.initPending.clear();
     };
 
     this.worker = worker;
@@ -342,6 +462,28 @@ class PiperAudioEngineManager {
     return () => {
       this.modelReadyListeners.delete(cb);
     };
+  }
+
+  /**
+   * Ses modelini (yoksa indirerek) belleğe yükler; okuma başlamadan önce
+   * çevrimdışı kullanım için modeli hazırlamakta kullanılır.
+   */
+  public preloadVoice(
+    voiceId: PiperVoiceId,
+    onProgress?: (prog: ModelDownloadProgress) => void
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let worker: Worker;
+      try {
+        worker = this.ensureWorker();
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+        return;
+      }
+      const requestId = ++this.requestCounter;
+      this.initPending.set(requestId, { resolve, reject, onProgress });
+      worker.postMessage({ type: "INIT_MODEL", requestId, voiceId });
+    });
   }
 
   /**

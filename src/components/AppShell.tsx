@@ -17,13 +17,16 @@ import {
   Settings,
   Users,
   User,
+  WifiOff,
 } from "lucide-react";
 import { useOkurLabStore } from "@/store/useOkurLabStore";
 import { ThemeMode } from "@/types";
 import { OkurLabLogo } from "./OkurLabLogo";
 import { CloudSyncAndShareModal } from "./CloudSyncAndShareModal";
 import { AuthProfileModal } from "./AuthProfileModal";
+import { VoiceModelManager } from "./VoiceModelManager";
 import { getSupabaseClient, pushStateToSupabase } from "@/lib/supabase";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 
 const NAV_ITEMS = [
   {
@@ -103,6 +106,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [cloudModalOpen, setCloudModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const online = useOnlineStatus();
 
   useEffect(() => {
     setMounted(true);
@@ -125,7 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Real-time background Supabase synchronization when books, currentWordIndex, or WPM change
   useEffect(() => {
-    if (!mounted || !isAuthenticated) return;
+    if (!mounted || !isAuthenticated || !online) return;
     const client = getSupabaseClient(supabaseUrl, supabaseAnonKey);
     if (!client) return;
     const timer = setTimeout(() => {
@@ -141,6 +145,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [
     mounted,
     isAuthenticated,
+    online,
     user.current_wpm,
     books.length,
     readingProgress,
@@ -345,6 +350,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main Content Container */}
       <main className="flex-1 md:pl-[276px] lg:pl-[292px] pb-24 md:pb-10 min-h-screen">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+          {mounted && !online && (
+            <div
+              role="status"
+              className="mb-5 px-4 py-3 rounded-2xl bg-[#E6D2B5] text-[#2C2520] border border-[#B85D3B]/40 text-xs font-semibold flex items-center gap-2.5"
+            >
+              <WifiOff className="w-4 h-4 text-[#B85D3B] shrink-0" />
+              <span>
+                Çevrimdışısın. Notların ve okuma konumların bu cihazda saklanıyor;
+                bağlantı gelince eşitlenir. Topluluk özellikleri çevrimiçi gerektirir.
+              </span>
+            </div>
+          )}
           {children}
         </div>
       </main>
@@ -375,7 +392,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Görünüm & Okuma Ayarları Modal */}
       {settingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-3xl bg-surface border border-border p-6 space-y-5 shadow-2xl">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-surface border border-border p-6 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5 text-[#B85D3B]" />
@@ -433,6 +450,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   );
                 })}
               </div>
+            </div>
+
+            <div className="pt-2 border-t border-border/70">
+              <VoiceModelManager />
             </div>
 
             <div className="pt-2 border-t border-border/70 flex items-center justify-between">

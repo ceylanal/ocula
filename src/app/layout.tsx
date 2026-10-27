@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Literata, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin", "latin-ext"],
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body
         className={`${plusJakarta.variable} ${literata.variable} font-sans antialiased`}
       >
+        <ServiceWorkerRegister />
         <AppShell>{children}</AppShell>
       </body>
     </html>

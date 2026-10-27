@@ -49,7 +49,7 @@ async function readCachedBlob(url) {
   // 2. Try CacheStorage fallback
   try {
     if (typeof caches !== "undefined") {
-      const cache = await caches.open("ocula-piper-models-v1") /* eski ad: mevcut model önbelleğini korumak için değiştirilmedi */;
+      const cache = await caches.open("ocula-piper-models-v1");
       const matched = await cache.match(url);
       if (matched) {
         const blob = await matched.blob();
@@ -82,7 +82,7 @@ async function writeCachedBlob(url, blob) {
   // 2. Save to CacheStorage
   try {
     if (typeof caches !== "undefined") {
-      const cache = await caches.open("ocula-piper-models-v1") /* eski ad: mevcut model önbelleğini korumak için değiştirilmedi */;
+      const cache = await caches.open("ocula-piper-models-v1");
       await cache.put(
         url,
         new Response(blob, {
