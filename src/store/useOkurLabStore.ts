@@ -7,8 +7,6 @@ import {
   BookNote,
   BookVisibility,
   CalibrationRecord,
-  CommunityQuotePost,
-  CommunityReview,
   ComprehensionQuestion,
   DailyTask,
   ExerciseLog,
@@ -27,6 +25,7 @@ import {
   INITIAL_USER_PROFILE,
 } from "@/data/mockData";
 import { generateAlgorithmicDailyPlan } from "@/lib/dailyPlanner";
+import { isUuid, newId } from "@/lib/ids";
 
 interface ReaderPreferences {
   fontFamily: FontFamily;
@@ -51,9 +50,6 @@ interface OkurLabState {
   savedAccounts: Record<string, SavedAccountSnapshot>;
   books: Book[];
   communityBooks: Book[];
-  communityMarginalia: BookNote[];
-  communityReviews: CommunityReview[];
-  communityQuotes: CommunityQuotePost[];
   lastActiveBookId: string;
   exerciseLogs: ExerciseLog[];
   calibrationHistory: CalibrationRecord[];
@@ -88,6 +84,7 @@ interface OkurLabState {
     books?: Book[];
     exerciseLogs?: ExerciseLog[];
     readingProgress?: Record<string, UserReadingProgress>;
+    bookNotes?: BookNote[];
   }) => void;
   updateReaderPrefs: (prefs: Partial<ReaderPreferences>) => void;
   recordExercise: (params: {
@@ -99,8 +96,8 @@ interface OkurLabState {
   }) => void;
   addCalibrationRecord: (
     record: Omit<CalibrationRecord, "id" | "completed_at">
-  ) => CalibrationRecord;
-  applyCalibratedWpm: (calibratedWpm: number) => void;
+  ) => void;
+  applyCalibratedWpm: (wpm: number) => void;
   recordReadingSession: (params: {
     bookId: string;
     wordIndex: number;
@@ -142,23 +139,6 @@ interface OkurLabState {
     is_public?: boolean;
   }) => BookNote;
   deleteBookNote: (noteId: string) => void;
-  toggleMarginaliaLike: (noteId: string) => void;
-  addCommunityReview: (params: {
-    book_id: string;
-    rating: number;
-    review_text: string;
-    achieved_wpm?: number;
-  }) => void;
-  toggleReviewLike: (reviewId: string) => void;
-  addReviewComment: (reviewId: string, content: string) => void;
-  addCommunityQuotePost: (params: {
-    book_id: string;
-    quote_text: string;
-    word_index: number;
-    note_comment?: string;
-  }) => void;
-  toggleQuoteLike: (quoteId: string) => void;
-  addQuoteComment: (quoteId: string, content: string) => void;
   resetDemoData: () => void;
 }
 
@@ -177,9 +157,6 @@ export const useOkurLabStore = create<OkurLabState>()(
         owner_name: INITIAL_USER_PROFILE.name,
       })),
       communityBooks: INITIAL_COMMUNITY_BOOKS,
-      communityMarginalia: [],
-      communityReviews: [],
-      communityQuotes: [],
       lastActiveBookId: INITIAL_BOOKS[0]?.id || "book-neuro-focus",
       exerciseLogs: INITIAL_EXERCISE_LOGS,
       calibrationHistory: [],
@@ -203,22 +180,7 @@ export const useOkurLabStore = create<OkurLabState>()(
           updated_at: new Date().toISOString(),
         },
       },
-      bookNotes: [
-        {
-          id: "note-initial-1",
-          book_id: "book-neuro-focus",
-          word_index: 48,
-          selected_text: "Optimal Recognition Point (ORP)",
-          content:
-            "Göz kelimenin tam ortasına değil, ortanın hafif soluna odaklandığında kelimeyi çok daha hızlı tanıyor.",
-          created_at: "2026-10-26T19:00:00.000Z",
-          author_name: INITIAL_USER_PROFILE.name,
-          author_wpm: 340,
-          type: "note",
-          is_public: true,
-          likes_count: 14,
-        },
-      ],
+      bookNotes: [],
       readerPrefs: {
         fontFamily: "serif",
         fontSize: 19,
@@ -260,6 +222,8 @@ export const useOkurLabStore = create<OkurLabState>()(
               savedAccounts: updatedSaved,
               user: {
                 ...existingAccount.user,
+                // Supabase kimliği varsa yerel profil ona bağlanır (topluluk yazarlığı bu kimliğe dayanır)
+                id: id || existingAccount.user.id,
                 name: name.trim() || existingAccount.user.name,
                 auth_provider: provider,
               },
@@ -331,6 +295,15 @@ export const useOkurLabStore = create<OkurLabState>()(
           readingProgress: data.readingProgress
             ? { ...state.readingProgress, ...data.readingProgress }
             : state.readingProgress,
+          bookNotes:
+            data.bookNotes && data.bookNotes.length > 0
+              ? [
+                  ...data.bookNotes,
+                  ...state.bookNotes.filter(
+                    (local) => !data.bookNotes!.some((cloud) => cloud.id === local.id)
+                  ),
+                ]
+              : state.bookNotes,
           lastSyncedAt: new Date().toISOString(),
         })),
 
@@ -382,36 +355,30 @@ export const useOkurLabStore = create<OkurLabState>()(
         });
       },
 
-      addCalibrationRecord: (record) => {
-        const entry: CalibrationRecord = {
-          ...record,
-          id: `cal-${Date.now()}`,
-          completed_at: new Date().toISOString(),
-        };
+      addCalibrationRecord: (record) =>
         set((state) => ({
-          calibrationHistory: [entry, ...state.calibrationHistory].slice(0, 30),
-        }));
-        return entry;
-      },
+          calibrationHistory: [
+            ...state.calibrationHistory,
+            {
+              ...record,
+              id: `cal-${Date.now()}`,
+              completed_at: new Date().toISOString(),
+            },
+          ],
+        })),
 
-      applyCalibratedWpm: (calibratedWpm) => {
-        const clean = Math.max(80, Math.min(1200, Math.round(calibratedWpm)));
+      // Varsayılan hızı ve mevcut tüm kitap konumlarındaki tercih edilen hızı günceller.
+      applyCalibratedWpm: (wpm) =>
         set((state) => {
-          const updatedProgress: Record<string, UserReadingProgress> = {};
+          const nextProgress: Record<string, UserReadingProgress> = {};
           for (const [bookId, prog] of Object.entries(state.readingProgress)) {
-            updatedProgress[bookId] = {
-              ...prog,
-              preferred_wpm: clean,
-              updated_at: new Date().toISOString(),
-            };
+            nextProgress[bookId] = { ...prog, preferred_wpm: wpm };
           }
           return {
-            user: { ...state.user, current_wpm: clean },
-            readerPrefs: { ...state.readerPrefs, defaultWpm: clean },
-            readingProgress: updatedProgress,
+            readerPrefs: { ...state.readerPrefs, defaultWpm: wpm },
+            readingProgress: nextProgress,
           };
-        });
-      },
+        }),
 
       recordReadingSession: ({
         bookId,
@@ -692,7 +659,7 @@ export const useOkurLabStore = create<OkurLabState>()(
       }) => {
         const state = get();
         const newNote: BookNote = {
-          id: `note-${Date.now()}`,
+          id: newId(),
           user_id: state.user.id,
           book_id,
           word_index,
@@ -703,151 +670,15 @@ export const useOkurLabStore = create<OkurLabState>()(
           author_wpm: state.user.current_wpm,
           type,
           is_public,
-          likes_count: 1,
+          likes_count: 0,
         };
-        set({
-          bookNotes: [newNote, ...state.bookNotes],
-          communityMarginalia: is_public
-            ? [newNote, ...state.communityMarginalia]
-            : state.communityMarginalia,
-        });
+        set({ bookNotes: [newNote, ...state.bookNotes] });
         return newNote;
       },
 
       deleteBookNote: (noteId) =>
         set((state) => ({
           bookNotes: state.bookNotes.filter((n) => n.id !== noteId),
-          communityMarginalia: state.communityMarginalia.filter(
-            (n) => n.id !== noteId
-          ),
-        })),
-
-      toggleMarginaliaLike: (noteId) =>
-        set((state) => ({
-          communityMarginalia: state.communityMarginalia.map((n) =>
-            n.id === noteId
-              ? { ...n, likes_count: (n.likes_count || 0) + 1 }
-              : n
-          ),
-        })),
-
-      addCommunityReview: ({ book_id, rating, review_text, achieved_wpm }) =>
-        set((state) => {
-          const allBooks = [...state.books, ...state.communityBooks];
-          const targetBook = allBooks.find((b) => b.id === book_id);
-          const newReview: CommunityReview = {
-            id: `rev-${Date.now()}`,
-            user_id: state.user.id,
-            user_name: state.user.name,
-            book_id,
-            book_title: targetBook?.title || "Kitap İncelemesi",
-            book_author: targetBook?.author || "Yazar",
-            achieved_wpm: achieved_wpm || state.user.current_wpm || 320,
-            rating,
-            review_text: review_text.trim(),
-            likes: 1,
-            liked_by_me: true,
-            comments: [],
-            created_at: "Şimdi",
-          };
-          return {
-            communityReviews: [newReview, ...state.communityReviews],
-          };
-        }),
-
-      toggleReviewLike: (reviewId) =>
-        set((state) => ({
-          communityReviews: state.communityReviews.map((r) => {
-            if (r.id !== reviewId) return r;
-            const liked = !r.liked_by_me;
-            return {
-              ...r,
-              liked_by_me: liked,
-              likes: Math.max(0, r.likes + (liked ? 1 : -1)),
-            };
-          }),
-        })),
-
-      addReviewComment: (reviewId, content) =>
-        set((state) => ({
-          communityReviews: state.communityReviews.map((r) => {
-            if (r.id !== reviewId || !content.trim()) return r;
-            return {
-              ...r,
-              comments: [
-                ...r.comments,
-                {
-                  id: `rc-${Date.now()}`,
-                  author_name: state.user.name,
-                  content: content.trim(),
-                  created_at: "Şimdi",
-                },
-              ],
-            };
-          }),
-        })),
-
-      addCommunityQuotePost: ({
-        book_id,
-        quote_text,
-        word_index,
-        note_comment,
-      }) =>
-        set((state) => {
-          const allBooks = [...state.books, ...state.communityBooks];
-          const targetBook = allBooks.find((b) => b.id === book_id);
-          const newQuote: CommunityQuotePost = {
-            id: `quote-${Date.now()}`,
-            user_id: state.user.id,
-            user_name: state.user.name,
-            user_wpm: state.user.current_wpm || 320,
-            book_id,
-            book_title: targetBook?.title || "Kitap Alıntısı",
-            book_author: targetBook?.author || "Yazar",
-            quote_text: quote_text.trim(),
-            word_index,
-            note_comment: note_comment?.trim() || undefined,
-            highlight_count: 1,
-            likes: 1,
-            liked_by_me: true,
-            comments: [],
-            created_at: "Şimdi",
-          };
-          return {
-            communityQuotes: [newQuote, ...state.communityQuotes],
-          };
-        }),
-
-      toggleQuoteLike: (quoteId) =>
-        set((state) => ({
-          communityQuotes: state.communityQuotes.map((q) => {
-            if (q.id !== quoteId) return q;
-            const liked = !q.liked_by_me;
-            return {
-              ...q,
-              liked_by_me: liked,
-              likes: Math.max(0, q.likes + (liked ? 1 : -1)),
-            };
-          }),
-        })),
-
-      addQuoteComment: (quoteId, content) =>
-        set((state) => ({
-          communityQuotes: state.communityQuotes.map((q) => {
-            if (q.id !== quoteId || !content.trim()) return q;
-            return {
-              ...q,
-              comments: [
-                ...q.comments,
-                {
-                  id: `qc-${Date.now()}`,
-                  author_name: state.user.name,
-                  content: content.trim(),
-                  created_at: "Şimdi",
-                },
-              ],
-            };
-          }),
         })),
 
       resetDemoData: () =>
@@ -856,10 +687,8 @@ export const useOkurLabStore = create<OkurLabState>()(
           isAuthenticated: true,
           user: { ...INITIAL_USER_PROFILE, auth_provider: "email" },
           books: INITIAL_BOOKS,
+          bookNotes: [],
           communityBooks: INITIAL_COMMUNITY_BOOKS,
-          communityMarginalia: [],
-          communityReviews: [],
-          communityQuotes: [],
           lastActiveBookId: INITIAL_BOOKS[0]?.id || "book-neuro-focus",
           exerciseLogs: INITIAL_EXERCISE_LOGS,
           calibrationHistory: [],
@@ -870,6 +699,28 @@ export const useOkurLabStore = create<OkurLabState>()(
     }),
     {
       name: "okurlab-storage-v2",
+      version: 3,
+      // v3: topluluk verisi sunucuya taşındı; yerel sahte veriyi at, not kimliklerini uuid yap.
+      migrate: (persisted) => {
+        const state = (persisted || {}) as Record<string, unknown>;
+        delete state.communityMarginalia;
+        delete state.communityReviews;
+        delete state.communityQuotes;
+        const upgradeNotes = (notes: unknown): BookNote[] =>
+          (Array.isArray(notes) ? (notes as BookNote[]) : [])
+            .filter((n) => n.id !== "note-initial-1")
+            .map((n) => (isUuid(n.id) ? n : { ...n, id: newId() }));
+        state.bookNotes = upgradeNotes(state.bookNotes);
+        const saved = state.savedAccounts as
+          | Record<string, { bookNotes?: unknown }>
+          | undefined;
+        if (saved) {
+          for (const snapshot of Object.values(saved)) {
+            snapshot.bookNotes = upgradeNotes(snapshot.bookNotes);
+          }
+        }
+        return state as unknown as OkurLabState;
+      },
       storage: createJSONStorage(() => localStorage),
     }
   )

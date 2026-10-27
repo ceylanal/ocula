@@ -111,7 +111,14 @@ function blocked(
 }
 
 function failure(err: unknown): Extract<ActionResult, { ok: false }> {
-  return { ok: false, reason: "error", message: toError(err).message };
+  const message = toError(err).message;
+  return {
+    ok: false,
+    reason: "error",
+    message: /failed to fetch|networkerror|load failed/i.test(message)
+      ? "Sunucuya ulaşılamadı. İnternet bağlantını kontrol et."
+      : message,
+  };
 }
 
 // Profil yalnızca ad/WPM/kullanıcı değiştiğinde yeniden yazılır.
