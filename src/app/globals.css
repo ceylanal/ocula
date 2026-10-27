@@ -2,7 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Primary Default Theme: Sepia (Warm Optical Book Paper) */
 :root,
+[data-theme="sepia"] {
+  --bg-primary: #f4ecda;
+  --bg-surface: #fdf9f0;
+  --bg-elevated: #ece1c9;
+  --text-primary: #2c2016;
+  --text-muted: #6e5844;
+  --border-color: #d8c5a5;
+  --accent-color: #4f46e5;
+}
+
 [data-theme="dark"] {
   --bg-primary: #070a12;
   --bg-surface: #0e1422;
@@ -23,22 +34,26 @@
   --accent-color: #4f46e5;
 }
 
-[data-theme="sepia"] {
-  --bg-primary: #f3ead6;
-  --bg-surface: #fcf7eb;
-  --bg-elevated: #ebe0c7;
-  --text-primary: #36291e;
-  --text-muted: #78634e;
-  --border-color: #dac8ab;
-  --accent-color: #b45309;
-}
-
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   transition: background-color 0.25s ease, color 0.25s ease;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
+}
+
+[data-theme="sepia"] body {
+  background-image: radial-gradient(
+      circle at 15% 0%,
+      rgba(180, 83, 9, 0.06),
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 85% 15%,
+      rgba(79, 70, 229, 0.05),
+      transparent 40%
+    );
+  background-attachment: fixed;
 }
 
 [data-theme="dark"] body {
@@ -53,6 +68,36 @@ body {
       transparent 38%
     );
   background-attachment: fixed;
+}
+
+/* Ensure high-contrast ink colors for accent badges on Sepia & Light paper */
+[data-theme="sepia"] .text-indigo-400,
+[data-theme="sepia"] .text-indigo-300,
+[data-theme="light"] .text-indigo-400,
+[data-theme="light"] .text-indigo-300 {
+  color: #4338ca;
+}
+
+[data-theme="sepia"] .text-emerald-400,
+[data-theme="light"] .text-emerald-400 {
+  color: #047857;
+}
+
+[data-theme="sepia"] .text-amber-400,
+[data-theme="sepia"] .text-amber-300,
+[data-theme="light"] .text-amber-400,
+[data-theme="light"] .text-amber-300 {
+  color: #b45309;
+}
+
+[data-theme="sepia"] .text-rose-400,
+[data-theme="light"] .text-rose-400 {
+  color: #be123c;
+}
+
+[data-theme="sepia"] .text-violet-400,
+[data-theme="light"] .text-violet-400 {
+  color: #6d28d9;
 }
 
 /* Subtle top specular highlight on surface cards in dark mode */

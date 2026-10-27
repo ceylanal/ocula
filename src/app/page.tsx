@@ -219,7 +219,7 @@ export default function ReadingStudioPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* LEFT (7 COLS): LARGE "OKUMAYA DEVAM ET (ACTIVE BOOK)" CARD + WARMUP SUGGESTION */}
         <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
-          <div className="relative flex-1 rounded-3xl bg-gradient-to-br from-indigo-950/70 via-surface to-surface border-2 border-indigo-500/35 p-6 sm:p-7 overflow-hidden shadow-2xl flex flex-col justify-between gap-6">
+          <div className="relative flex-1 rounded-3xl bg-gradient-to-br from-indigo-500/10 via-surface to-surface border-2 border-indigo-500/35 p-6 sm:p-7 overflow-hidden shadow-2xl flex flex-col justify-between gap-6">
             {/* Optical Ambient Rings */}
             <div className="pointer-events-none absolute -right-14 -top-14 w-64 h-64 rounded-full border border-indigo-500/15 flex items-center justify-center">
               <div className="w-40 h-40 rounded-full border border-violet-500/15 flex items-center justify-center">

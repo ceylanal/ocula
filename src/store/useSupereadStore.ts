@@ -106,7 +106,7 @@ interface SupereadState {
 export const useSupereadStore = create<SupereadState>()(
   persist(
     (set, get) => ({
-      theme: "dark",
+      theme: "sepia",
       user: INITIAL_USER_PROFILE,
       books: INITIAL_BOOKS,
       lastActiveBookId: INITIAL_BOOKS[0]?.id || "book-neuro-focus",
@@ -397,6 +397,7 @@ export const useSupereadStore = create<SupereadState>()(
 
       resetDemoData: () =>
         set({
+          theme: "sepia",
           user: INITIAL_USER_PROFILE,
           books: INITIAL_BOOKS,
           lastActiveBookId: INITIAL_BOOKS[0]?.id || "book-neuro-focus",
@@ -407,7 +408,7 @@ export const useSupereadStore = create<SupereadState>()(
         }),
     }),
     {
-      name: "ocula-vision-storage-v2",
+      name: "ocula-vision-storage-v3",
       storage: createJSONStorage(() => localStorage),
     }
   )

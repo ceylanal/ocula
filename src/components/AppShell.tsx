@@ -15,6 +15,7 @@ import {
   Cloud,
   Share2,
   Sparkles,
+  Settings,
 } from "lucide-react";
 import { useSupereadStore } from "@/store/useSupereadStore";
 import { ThemeMode } from "@/types";
@@ -48,27 +49,51 @@ const NAV_ITEMS = [
   },
 ];
 
-const THEME_OPTIONS: { id: ThemeMode; label: string; icon: React.ElementType }[] = [
-  { id: "dark", label: "Gece", icon: Moon },
-  { id: "light", label: "Gün", icon: Sun },
-  { id: "sepia", label: "Kağıt", icon: BookMarked },
+const THEME_OPTIONS: {
+  id: ThemeMode;
+  label: string;
+  desc: string;
+  icon: React.ElementType;
+}[] = [
+  {
+    id: "sepia",
+    label: "Sepya (Ana Tema)",
+    desc: "Varsayılan göz yormayan kitap kağıdı",
+    icon: BookMarked,
+  },
+  {
+    id: "dark",
+    label: "Gece Modu",
+    desc: "Düşük ışık için karanlık optik tema",
+    icon: Moon,
+  },
+  {
+    id: "light",
+    label: "Gün Modu",
+    desc: "Yüksek kontrast beyaz tema",
+    icon: Sun,
+  },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { theme, setTheme, user } = useSupereadStore();
+  const { theme, setTheme, user, readerPrefs, updateReaderPrefs } =
+    useSupereadStore();
   const [mounted, setMounted] = useState(false);
   const [cloudModalOpen, setCloudModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  const activeTheme: ThemeMode = mounted ? theme || "sepia" : "sepia";
+
   useEffect(() => {
     if (mounted) {
-      document.documentElement.setAttribute("data-theme", theme);
+      document.documentElement.setAttribute("data-theme", activeTheme);
     }
-  }, [theme, mounted]);
+  }, [activeTheme, mounted]);
 
   const currentWpm = mounted ? user.current_wpm : 340;
   const comprehension = mounted ? user.comprehension_rate : 85;
@@ -190,39 +215,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Cloud Sync / Mobile Share + Theme Switcher Footer */}
-        <div className="p-4 border-t border-border/80 space-y-3">
+        {/* Cloud Sync / Mobile Share + Settings Button Footer */}
+        <div className="p-4 border-t border-border/80 space-y-2.5">
           <button
             onClick={() => setCloudModalOpen(true)}
-            className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-indigo-500/15 via-violet-500/15 to-rose-500/15 hover:from-indigo-600 hover:to-violet-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-semibold flex items-center justify-between transition-all shadow-sm"
+            className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-indigo-500/15 via-violet-500/15 to-rose-500/15 hover:from-indigo-600 hover:to-violet-600 text-indigo-400 hover:text-white border border-indigo-500/30 text-xs font-semibold flex items-center justify-between transition-all shadow-sm"
           >
             <span className="flex items-center gap-2">
               <Cloud className="w-4 h-4" />
-              <span>Telefona Kur & Bulut</span>
+              <span>Telefona Kur &amp; Bulut</span>
             </span>
             <Share2 className="w-3.5 h-3.5" />
           </button>
 
-          <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-surface-elevated border border-border">
-            {THEME_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              const active = mounted && theme === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  onClick={() => setTheme(opt.id)}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all ${
-                    active
-                      ? "bg-surface text-foreground shadow-sm border border-border"
-                      : "text-muted hover:text-foreground"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{opt.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="w-full py-2.5 px-3.5 rounded-xl bg-surface-elevated hover:bg-surface border border-border text-xs font-semibold flex items-center justify-between transition-all"
+          >
+            <span className="flex items-center gap-2 text-foreground">
+              <Settings className="w-4 h-4 text-indigo-400" />
+              <span>Ayarlar &amp; Görünüm</span>
+            </span>
+            <span className="px-2 py-0.5 rounded-md bg-surface border border-border text-[10px] font-bold text-muted">
+              {activeTheme === "sepia"
+                ? "Sepya (Ana)"
+                : activeTheme === "dark"
+                ? "Gece"
+                : "Gün"}
+            </span>
+          </button>
         </div>
       </aside>
 
@@ -246,24 +267,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Share2 className="w-3.5 h-3.5" />
           </button>
 
-          <div className="flex items-center rounded-xl bg-surface-elevated border border-border p-0.5">
-            {THEME_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              const active = mounted && theme === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  onClick={() => setTheme(opt.id)}
-                  title={opt.label}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    active ? "bg-indigo-600 text-white" : "text-muted"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                </button>
-              );
-            })}
-          </div>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="p-2 rounded-xl bg-surface-elevated border border-border text-foreground"
+            title="Ayarlar & Tema Modu"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       </header>
 
@@ -296,6 +306,97 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+
+      {/* Görünüm & Okuma Ayarları Modal */}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-3xl bg-surface border border-border p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <Settings className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-extrabold text-base">
+                  Ayarlar &amp; Görünüm Modu
+                </h3>
+              </div>
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="px-2.5 py-1 rounded-lg bg-surface-elevated border border-border text-xs font-semibold text-muted hover:text-foreground"
+              >
+                Kapat
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="text-xs font-bold uppercase tracking-wider text-muted">
+                Renk &amp; Kağıt Teması (Varsayılan: Sepya)
+              </div>
+              <div className="space-y-2">
+                {THEME_OPTIONS.map((opt) => {
+                  const Icon = opt.icon;
+                  const isSelected = activeTheme === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      onClick={() => setTheme(opt.id)}
+                      className={`w-full p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all ${
+                        isSelected
+                          ? "bg-indigo-600/15 border-indigo-500 shadow-sm"
+                          : "bg-surface-elevated/70 border-border hover:border-indigo-500/40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                            isSelected
+                              ? "bg-indigo-600 text-white"
+                              : "bg-surface border border-border text-muted"
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold">{opt.label}</div>
+                          <div className="text-xs text-muted">{opt.desc}</div>
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+                          Aktif
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-border/70 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold">
+                  Kademeli Hız Artışı (Auto-Ramp)
+                </div>
+                <div className="text-[11px] text-muted">
+                  Okurken her 2 dakikada / 400 kelimede +10 WPM
+                </div>
+              </div>
+              <button
+                onClick={() =>
+                  updateReaderPrefs({
+                    autoRampEnabled: !readerPrefs.autoRampEnabled,
+                  })
+                }
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                  readerPrefs.autoRampEnabled
+                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                    : "bg-surface-elevated border-border text-muted"
+                }`}
+              >
+                {readerPrefs.autoRampEnabled ? "AÇIK (+10 WPM)" : "KAPALI"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cloud Sync & Share Modal */}
       <CloudSyncAndShareModal
