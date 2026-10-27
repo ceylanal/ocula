@@ -27,6 +27,42 @@ create table if not exists public.users (
   created_at timestamptz default now()
 );
 
+-- Abonelik planı. İstemci ASLA değiştiremez (bkz. users_protect_plan); Pro yetkisi
+-- yalnızca service_role / SQL Editor ile verilir:  update public.users set plan = 'pro' where email = '...';
+alter table public.users add column if not exists plan text not null default 'free';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'users_plan_check' and conrelid = 'public.users'::regclass
+  ) then
+    alter table public.users add constraint users_plan_check check (plan in ('free', 'pro'));
+  end if;
+end $$;
+
+create or replace function public.protect_user_plan()
+returns trigger
+language plpgsql
+as $$
+begin
+  -- Yönetici bağlantıları (service_role, SQL Editor) planı serbestçe değiştirebilir.
+  if current_user in ('service_role', 'postgres', 'supabase_admin') then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    new.plan := 'free';
+  else
+    new.plan := old.plan;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists users_protect_plan on public.users;
+create trigger users_protect_plan before insert or update on public.users
+  for each row execute function public.protect_user_plan();
+
 create table if not exists public.books (
   id text primary key,
   title text not null,

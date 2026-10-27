@@ -8,9 +8,28 @@ import {
   XCircle,
   KeyRound,
   RefreshCw,
+  Lock,
+  LogIn,
 } from "lucide-react";
 import { Book, ComprehensionQuestion } from "@/types";
 import { useOkurLabStore } from "@/store/useOkurLabStore";
+import { getSupabaseClient } from "@/lib/supabase";
+import { isPro } from "@/lib/plan";
+import { isUuid } from "@/lib/ids";
+
+/** Küçük, sakin rozetler: "Pro" ve "Beta". Süs değil, durum bilgisi. */
+function PlanBadges() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="px-2 py-0.5 rounded-md bg-[#B85D3B] text-[#FBF7EE] text-[11px] font-bold">
+        Pro
+      </span>
+      <span className="px-2 py-0.5 rounded-md border border-border text-muted text-[11px] font-semibold">
+        Beta
+      </span>
+    </span>
+  );
+}
 
 interface BookComprehensionQuizProps {
   book: Book;
@@ -26,7 +45,14 @@ export function BookComprehensionQuiz({
     recordExercise,
     geminiApiKey,
     setGeminiApiKey,
+    user,
+    isAuthenticated,
+    supabaseUrl,
+    supabaseAnonKey,
   } = useOkurLabStore();
+  const pro = isAuthenticated && isPro(user);
+  // Yerel demo hesapların kimliği uuid değildir; gerçek (Supabase) hesap uuid taşır.
+  const hasCloudAccount = isAuthenticated && isUuid(user.id);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationSource, setGenerationSource] = useState<string | null>(null);
@@ -44,9 +70,19 @@ export function BookComprehensionQuiz({
     setSubmittedScore(null);
 
     try {
+      // Sunucu Pro yetkisini Supabase oturum jetonuyla doğrular.
+      const client = getSupabaseClient(supabaseUrl, supabaseAnonKey);
+      const { data: sessionData } = (await client?.auth.getSession()) ?? {
+        data: { session: null },
+      };
+      const token = sessionData.session?.access_token;
+
       const res = await fetch("/api/generate-questions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           bookId: book.id,
           title: book.title,
@@ -57,7 +93,10 @@ export function BookComprehensionQuiz({
 
       const data = await res.json();
       if (!res.ok || !Array.isArray(data.questions)) {
-        throw new Error(data.error || "Sorular üretilemedi.");
+        // Yetki hataları (401/402/503) sunucunun açık mesajıyla gösterilir.
+        const err = new Error(data.error || "Sorular üretilemedi.");
+        (err as Error & { userFacing?: boolean }).userFacing = res.status >= 401 && res.status !== 500;
+        throw err;
       }
 
       setBookQuestions(book.id, data.questions);
@@ -69,7 +108,9 @@ export function BookComprehensionQuiz({
     } catch (err) {
       console.error(err);
       setErrorMsg(
-        "Anlama soruları üretilirken bir hata oluştu. Lütfen tekrar deneyin."
+        err instanceof Error && (err as Error & { userFacing?: boolean }).userFacing
+          ? err.message
+          : "Anlama soruları üretilirken bir hata oluştu. Lütfen tekrar deneyin."
       );
     } finally {
       setIsGenerating(false);
@@ -99,14 +140,51 @@ export function BookComprehensionQuiz({
     questions.length > 0 &&
     questions.every((q) => typeof answers[q.id] === "number");
 
+  if (!pro) {
+    return (
+      <section
+        aria-labelledby="quiz-locked-title"
+        className="p-6 rounded-3xl bg-surface border border-border space-y-4"
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <PlanBadges />
+          <h3 id="quiz-locked-title" className="text-lg font-serif font-bold">
+            Okuduğunu anlama soruları
+          </h3>
+        </div>
+        <p className="text-sm text-muted leading-relaxed max-w-xl">
+          &quot;{book.title}&quot; kitabının paragraflarından 4 çoktan seçmeli soru
+          üretir ve anlama oranını geçmişine kaydeder. Bu özellik beta aşamasında
+          ve yalnızca Pro hesaplara açık. Pro erişimi şimdilik davetle veriliyor.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          {!hasCloudAccount ? (
+            <button
+              onClick={() => window.dispatchEvent(new Event("okurlab:open-auth"))}
+              className="px-5 py-3 rounded-xl bg-[#B85D3B] hover:bg-[#A14D2E] text-[#FBF7EE] text-sm font-bold flex items-center gap-2"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Pro hesabınla giriş yap</span>
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-2 text-sm text-muted">
+              <Lock className="w-4 h-4" />
+              <span>Hesabın (Pro değil) bu özelliği kullanamıyor.</span>
+            </span>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div className="p-6 rounded-3xl bg-surface border-2 border-indigo-500/30 space-y-5 shadow-xl">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
-          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400">
+          <div className="flex items-center gap-2 text-xs font-semibold text-indigo-400">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Faz 4 • Yapay Zeka Destekli Okuduğunu Anlama Motoru</span>
+            <PlanBadges />
           </div>
           <h3 className="text-lg font-bold">
             &quot;{book.title}&quot; — Anlama ve Kavrama Testi

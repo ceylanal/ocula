@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ComprehensionQuestion } from "@/types";
+import { verifyProAccess } from "@/lib/serverPlan";
 
 interface GenerateQuestionsBody {
   bookId: string;
@@ -15,6 +16,12 @@ interface GenerateQuestionsBody {
  * or the built-in Semantic Turkish Text Analyzer.
  */
 export async function POST(req: NextRequest) {
+  // Anlama sorusu üretimi Pro özelliğidir (beta). Yetki istemciye değil, sunucuda doğrulanır.
+  const access = await verifyProAccess(req);
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+
   try {
     const body = (await req.json()) as GenerateQuestionsBody;
     const { bookId = "custom-book", title = "Metin", paragraphs = [], apiKey } = body;

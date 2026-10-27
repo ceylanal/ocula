@@ -67,8 +67,25 @@ for (const t of ["users","books","profiles","annotations","reviews","quote_posts
   check(`anon ${t} okuyamaz`, !!x.error && /permission denied/.test(x.error), x.error);
 }
 
+console.log("\n-- users.plan koruması");
+let x = await as("authenticated", A, "select plan from public.users");
+check("A kendi planını okur (varsayılan free)", x.rows?.[0]?.plan === "free", JSON.stringify(x));
+x = await as("authenticated", A, "update public.users set plan = 'pro' where id = '" + A + "'");
+check("A kendi planını Pro'ya yükseltemez", (await db.query("select plan from public.users where id='" + A + "'")).rows[0].plan === "free");
+x = await as("authenticated", C, "insert into public.users (id,email,name,plan) values ('" + C + "','c@x.com','Can','pro')");
+check("yeni kayıt Pro olarak eklenemez", !x.error && (await db.query("select plan from public.users where id='" + C + "'")).rows[0].plan === "free", x.error);
+await db.query("update public.users set plan = 'pro' where id = '" + A + "'");
+x = await as("authenticated", A, "select plan from public.users");
+check("yönetici verince A Pro görür", x.rows?.[0]?.plan === "pro", JSON.stringify(x));
+x = await as("authenticated", A, "update public.users set name = 'Ayşe Y', plan = 'free' where id = '" + A + "'");
+check("A başka alanı güncellerken planı düşüremez/değiştiremez", (await db.query("select plan, name from public.users where id='" + A + "'")).rows[0].plan === "pro");
+x = await as("authenticated", A, "update public.users set plan = 'gold' where id = '" + A + "'");
+check("geçersiz plan reddedilir veya yok sayılır", (await db.query("select plan from public.users where id='" + A + "'")).rows[0].plan === "pro");
+await db.query("update public.users set plan = 'free' where id = '" + A + "'");
+await db.query("delete from public.users where id = '" + C + "'");
+
 console.log("\n-- Faz 0: users/books");
-let x = await as("authenticated", A, "select id from public.users");
+x = await as("authenticated", A, "select id from public.users");
 check("A yalnızca kendi users satırını görür", x.rows?.length === 1 && x.rows[0].id === A, JSON.stringify(x));
 x = await as("authenticated", A, "select id from public.books");
 check("A sahibi olmayan eski kitabı görmez", x.rows?.length === 0, JSON.stringify(x));

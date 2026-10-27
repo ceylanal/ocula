@@ -156,4 +156,6 @@ export interface UserProfile {
   streak_days: number;
   created_at: string;
   auth_provider?: "email" | "google" | "guest";
+  /** Abonelik planı; yalnızca sunucudan gelir. Yoksa "free" sayılır. */
+  plan?: "free" | "pro";
 }
