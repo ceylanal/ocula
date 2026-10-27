@@ -10,7 +10,6 @@ import {
   Eye,
   FileText,
   ArrowLeft,
-  Bookmark,
   Plus,
   Trash2,
   Clock,
@@ -20,21 +19,18 @@ import {
   Play,
   Pause,
   Gauge,
-  Globe,
-  Lock,
-  Users,
-  Share2,
   Copy,
   Check,
-  Highlighter,
-  MessageSquarePlus,
-  Quote,
-  Heart,
   Compass,
   KeyRound,
 } from "lucide-react";
 import { useOkurLabStore } from "@/store/useOkurLabStore";
 import { ActionResult, useCommunityStore } from "@/store/useCommunityStore";
+import { AnnotationSelectionMenu } from "@/components/reader/AnnotationSelectionMenu";
+import { MarginaliaPanel } from "@/components/reader/MarginaliaPanel";
+import { PersonalNotesPanel } from "@/components/reader/PersonalNotesPanel";
+import { BookUploadPanel } from "@/components/library/BookUploadPanel";
+import { VISIBILITY_OPTIONS } from "@/components/library/visibilityOptions";
 import { Book, BookVisibility, FontFamily, ReadingMode } from "@/types";
 import { parseUploadedBookFile } from "@/lib/fileParser";
 import { tokenizeParagraphs } from "@/lib/textUtils";
@@ -49,36 +45,6 @@ const FONT_CLASS_MAP: Record<FontFamily, string> = {
   serif: "font-serif",
   mono: "font-mono",
 };
-
-const VISIBILITY_OPTIONS: {
-  id: BookVisibility;
-  label: string;
-  shortLabel: string;
-  desc: string;
-  icon: React.ComponentType<{ className?: string }>;
-}[] = [
-  {
-    id: "private",
-    label: "Sadece Ben (Özel)",
-    shortLabel: "Sadece Ben",
-    desc: "Yalnızca kendi kütüphanenizde ve bulut hesabınızda görünür.",
-    icon: Lock,
-  },
-  {
-    id: "friends",
-    label: "Arkadaşlarla Paylaş (Davet Linki / Kodu Üret)",
-    shortLabel: "Arkadaşlarla Paylaş",
-    desc: "Özel davet kodu ve link üretilir; linke tıklayanlar kitabı kütüphanesine ekleyebilir.",
-    icon: Users,
-  },
-  {
-    id: "public",
-    label: "Topluluk Kütüphanesi (Herkese Açık)",
-    shortLabel: "Topluluk Kütüphanesi",
-    desc: "Tüm OkurLab okurları 'Keşfet' sekmesinden bu kitaba erişip birlikte okuyabilir.",
-    icon: Globe,
-  },
-];
 
 function LibraryAndReaderContent() {
   const searchParams = useSearchParams();
@@ -1026,84 +992,21 @@ function LibraryAndReaderContent() {
 
         {/* Floating Sepia Annotation Popover Menu (when user selects a sentence/word block) */}
         {selectionMenu && (
-          <div className="p-4 rounded-2xl bg-[#EFE8DA] border-2 border-[#B85D3B] shadow-xl space-y-3 animate-in fade-in duration-200">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#B85D3B]">
-                  <Quote className="w-3.5 h-3.5" />
-                  <span>Seçilen Metin • Sepya Alıntı &amp; Kenar Notu Menüsü</span>
-                </div>
-                <p className="font-serif italic text-sm text-[#2C2520] border-l-2 border-[#B85D3B] pl-3 line-clamp-3">
-                  &ldquo;{selectionMenu.text}&rdquo;
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectionMenu(null)}
-                className="px-2.5 py-1 rounded-lg bg-background border border-border text-xs font-semibold text-muted hover:text-foreground shrink-0"
-              >
-                Kapat
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handleQuickHighlight}
-                className="px-3.5 py-2 rounded-xl bg-[#E6D2B5] hover:bg-[#B85D3B] text-[#2C2520] hover:text-[#F6F1E7] border border-[#B85D3B]/40 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
-              >
-                <Highlighter className="w-3.5 h-3.5" />
-                <span>Altını Çiz</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setSelectionMenu((prev) =>
-                    prev ? { ...prev, showNoteInput: !prev.showNoteInput } : null
-                  )
-                }
-                className="px-3.5 py-2 rounded-xl bg-background hover:bg-[#5C6B57] text-[#2C2520] hover:text-[#F6F1E7] border border-border text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
-              >
-                <MessageSquarePlus className="w-3.5 h-3.5" />
-                <span>Kenar Notu / Yorum Ekle</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleShareQuoteCardToCommunity}
-                className="px-3.5 py-2 rounded-xl bg-[#B85D3B] hover:bg-[#A14D2E] text-[#F6F1E7] text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
-              >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>Alıntı Kartı Paylaş (Okur Salonu)</span>
-              </button>
-            </div>
-
-            {selectionMenu.showNoteInput && (
-              <form
-                onSubmit={handleSaveSelectionNote}
-                className="pt-2 flex flex-col sm:flex-row gap-2"
-              >
-                <input
-                  type="text"
-                  value={selectionMenu.noteDraft}
-                  onChange={(e) =>
-                    setSelectionMenu((prev) =>
-                      prev ? { ...prev, noteDraft: e.target.value } : null
-                    )
-                  }
-                  placeholder="Bu cümle hakkındaki kenar notunuzu veya yorumunuzu yazın..."
-                  className="flex-1 px-3.5 py-2 rounded-xl bg-background border border-border text-xs focus:outline-none focus:border-[#B85D3B]"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-[#5C6B57] text-[#F6F1E7] text-xs font-bold shrink-0"
-                >
-                  Kenar Notunu Kaydet
-                </button>
-              </form>
-            )}
-          </div>
+          <AnnotationSelectionMenu
+            selection={selectionMenu}
+            onClose={() => setSelectionMenu(null)}
+            onHighlight={handleQuickHighlight}
+            onToggleNoteInput={() =>
+              setSelectionMenu((prev) =>
+                prev ? { ...prev, showNoteInput: !prev.showNoteInput } : null
+              )
+            }
+            onNoteDraftChange={(value) =>
+              setSelectionMenu((prev) => (prev ? { ...prev, noteDraft: value } : null))
+            }
+            onSaveNote={handleSaveSelectionNote}
+            onShareQuote={handleShareQuoteCardToCommunity}
+          />
         )}
 
         {/* Piper Neural TTS (Offline AI Audio) Engine Bar */}
@@ -1490,224 +1393,33 @@ function LibraryAndReaderContent() {
             <aside className="lg:col-span-4 space-y-5">
               {/* Community Marginalia ("Topluluk Notları & En Çok Altı Çizilenler") */}
               {showCommunityMarginalia && (
-                <div className="p-5 rounded-3xl bg-surface border border-border space-y-4 shadow-sm">
-                  <div className="flex items-center justify-between border-b border-border pb-3">
-                    <div>
-                      <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#B85D3B]">
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Marginalia • Kenar Notları</span>
-                      </div>
-                      <h3 className="font-serif font-bold text-base text-foreground">
-                        Topluluk Notları &amp; Altı Çizilenler
-                      </h3>
-                    </div>
-                    <button
-                      onClick={() => setShowCommunityMarginalia(false)}
-                      className="text-xs text-muted hover:text-foreground"
-                    >
-                      Gizle
-                    </button>
-                  </div>
-
-                  {/* Quick Highlight / Note Composer inside Marginalia */}
-                  <form onSubmit={handleAddNote} className="space-y-2">
-                    <textarea
-                      rows={2}
-                      value={newNoteText}
-                      onChange={(e) => setNewNoteText(e.target.value)}
-                      placeholder={
-                        selectedQuote
-                          ? `"${selectedQuote.slice(0, 45)}..." için kenar notu ekle`
-                          : "Bu sayfaya (Kelime #" +
-                            (currentWordIndex + 1) +
-                            ") ortak kenar notu bırakın..."
-                      }
-                      className="w-full rounded-xl bg-background border border-border p-3 text-xs focus:outline-none focus:border-[#B85D3B]"
-                    />
-                    <button
-                      type="submit"
-                      className="w-full py-2 rounded-xl bg-[#B85D3B] hover:bg-[#A14D2E] text-[#F6F1E7] text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Kenar Notu Bırak ({currentWpm} WPM)</span>
-                    </button>
-                  </form>
-
-                  {/* Marginalia Feed */}
-                  <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                    {activeBookMarginalia.length === 0 ? (
-                      <div className="p-4 rounded-2xl bg-background/70 border border-border text-xs text-muted text-center space-y-1">
-                        {communityStatus === "ready" ? (
-                          <>
-                            <p className="font-serif italic text-foreground">
-                              Bu kitapta ilk kenar notunu siz bırakın!
-                            </p>
-                            <p>
-                              Okurken herhangi bir cümleyi seçerek altını çizebilir
-                              veya yorum ekleyebilirsiniz.
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="font-serif italic text-foreground">
-                              Topluluk notları için giriş gerekli.
-                            </p>
-                            <p>
-                              {communityStatus === "unconfigured"
-                                ? "Profil menüsünden Supabase bağlantısını tanımla."
-                                : "Supabase hesabınla giriş yaparsan diğer okurların notlarını görür ve kendi notlarını paylaşırsın."}{" "}
-                              Notların bu cihazda saklanmaya devam eder.
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    ) : (
-                      activeBookMarginalia.map((item) => (
-                        <div
-                          key={item.id}
-                          className="p-3.5 rounded-2xl bg-background/90 border border-border space-y-2 hover:border-[#B85D3B]/40 transition-all"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="w-5 h-5 rounded-full bg-[#B85D3B]/20 text-[#B85D3B] text-[10px] font-bold flex items-center justify-center shrink-0">
-                                {(item.author_name || "O")
-                                  .slice(0, 1)
-                                  .toUpperCase()}
-                              </span>
-                              <span className="text-xs font-bold truncate">
-                                {item.author_name || "OkurLab Okuru"}
-                              </span>
-                              {item.author_wpm && (
-                                <span className="px-1.5 py-0.5 rounded bg-[#5C6B57]/15 text-[#5C6B57] text-[10px] font-bold shrink-0">
-                                  {item.author_wpm} WPM
-                                </span>
-                              )}
-                            </div>
-
-                            <button
-                              onClick={() =>
-                                updateReadingProgress(
-                                  activeBook.id,
-                                  item.word_index,
-                                  readingMode,
-                                  currentWpm
-                                )
-                              }
-                              className="text-[11px] font-semibold text-[#B85D3B] hover:underline shrink-0"
-                            >
-                              #{item.word_index + 1} &rarr;
-                            </button>
-                          </div>
-
-                          {item.selected_text && (
-                            <blockquote className="font-serif italic text-xs text-[#2C2520] bg-[#E6D2B5]/45 border-l-2 border-[#B85D3B] pl-2.5 py-1.5 pr-2 rounded-r-lg">
-                              &ldquo;{item.selected_text}&rdquo;
-                            </blockquote>
-                          )}
-
-                          <p className="text-xs text-foreground/90 leading-relaxed">
-                            {item.content}
-                          </p>
-
-                          <div className="flex items-center justify-between pt-1 text-[11px] text-muted">
-                            <span className="inline-flex items-center gap-1">
-                              {item.type === "highlight" ? (
-                                <>
-                                  <Highlighter className="w-3 h-3 text-[#B85D3B]" />
-                                  <span>Popüler Altı Çizili</span>
-                                </>
-                              ) : (
-                                <>
-                                  <StickyNote className="w-3 h-3 text-[#5C6B57]" />
-                                  <span>Kenar Notu</span>
-                                </>
-                              )}
-                            </span>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleToggleMarginaliaLike(item.id)}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-colors ${
-                                  item.liked_by_me
-                                    ? "bg-[#B85D3B]/15 border-[#B85D3B] text-foreground"
-                                    : "bg-surface border-border hover:border-[#B85D3B] text-foreground"
-                                }`}
-                              >
-                                <Heart
-                                  className="w-3 h-3 text-[#B85D3B]"
-                                  fill={item.liked_by_me ? "#B85D3B" : "none"}
-                                />
-                                <span>{item.likes_count ?? 0}</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+                <MarginaliaPanel
+                  items={activeBookMarginalia}
+                  status={communityStatus}
+                  currentWordIndex={currentWordIndex}
+                  currentWpm={currentWpm}
+                  newNoteText={newNoteText}
+                  selectedQuote={selectedQuote}
+                  onNoteTextChange={setNewNoteText}
+                  onSubmitNote={handleAddNote}
+                  onHide={() => setShowCommunityMarginalia(false)}
+                  onJump={(wordIndex) =>
+                    updateReadingProgress(activeBook.id, wordIndex, readingMode, currentWpm)
+                  }
+                  onToggleLike={handleToggleMarginaliaLike}
+                />
               )}
 
               {/* Personal Notes Drawer */}
               {showNotesPanel && (
-                <div className="p-5 rounded-3xl bg-surface border border-border space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-serif font-bold text-sm flex items-center gap-2">
-                      <Bookmark className="w-4 h-4 text-[#B85D3B]" />
-                      <span>Kişisel Notlarım &amp; Yer İmleri</span>
-                    </h3>
-                    <span className="text-xs text-muted">
-                      Kelime #{currentWordIndex + 1}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
-                    {activeBookNotes.length === 0 ? (
-                      <p className="text-xs text-muted text-center py-4">
-                        Henüz kişisel not eklenmedi. Metin seçerek veya yukarıdan
-                        ekleyebilirsiniz.
-                      </p>
-                    ) : (
-                      activeBookNotes.map((note) => (
-                        <div
-                          key={note.id}
-                          className="p-3 rounded-2xl bg-background border border-border space-y-1.5"
-                        >
-                          <div className="flex items-center justify-between text-[11px] text-muted">
-                            <button
-                              onClick={() =>
-                                updateReadingProgress(
-                                  activeBook.id,
-                                  note.word_index,
-                                  readingMode,
-                                  currentWpm
-                                )
-                              }
-                              className="text-[#B85D3B] font-semibold hover:underline"
-                            >
-                              Kelime #{note.word_index + 1} konumuna git &rarr;
-                            </button>
-                            <button
-                              onClick={() => handleDeleteNote(note.id)}
-                              className="text-muted hover:text-[#B85D3B]"
-                              title="Notu Sil"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          {note.selected_text && (
-                            <div className="font-serif text-[11px] italic text-foreground border-l-2 border-[#B85D3B] pl-2">
-                              &ldquo;{note.selected_text}&rdquo;
-                            </div>
-                          )}
-                          <p className="text-xs text-foreground leading-relaxed">
-                            {note.content}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+                <PersonalNotesPanel
+                  notes={activeBookNotes}
+                  currentWordIndex={currentWordIndex}
+                  onJump={(wordIndex) =>
+                    updateReadingProgress(activeBook.id, wordIndex, readingMode, currentWpm)
+                  }
+                  onDelete={handleDeleteNote}
+                />
               )}
             </aside>
           )}
@@ -1839,155 +1551,20 @@ function LibraryAndReaderContent() {
 
       {/* File Upload Dropzone Modal with 3 Visibility Options */}
       {showUploadModal && (
-        <div className="p-6 rounded-3xl bg-surface border-2 border-dashed border-[#B85D3B]/50 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-serif font-bold text-base">
-                Kütüphaneye PDF veya E-Kitap Yükle &amp; Paylaşım Ayarı Seç
-              </h3>
-              <p className="text-xs text-muted">
-                PDF sayfaları ve EPUB bölümleri otomatik olarak temiz
-                paragraflara ve kelime dizilerine dönüştürülür.
-              </p>
-            </div>
-            <button
-              onClick={() => setShowUploadModal(false)}
-              className="px-2.5 py-1 rounded-lg bg-background border border-border text-xs font-semibold text-muted hover:text-foreground"
-            >
-              Kapat
-            </button>
-          </div>
-
-          {/* 3 Visibility Selector Cards before uploading */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted block">
-              Kitap Görünürlük &amp; Paylaşım Seçeneği
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {VISIBILITY_OPTIONS.map((opt) => {
-                const Icon = opt.icon;
-                const active = uploadVisibility === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setUploadVisibility(opt.id)}
-                    className={`p-3.5 rounded-2xl border text-left transition-all flex items-start gap-3 ${
-                      active
-                        ? "bg-[#B85D3B]/15 border-[#B85D3B] shadow-sm"
-                        : "bg-background/70 border-border hover:border-[#B85D3B]/40"
-                    }`}
-                  >
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                        active
-                          ? "bg-[#B85D3B] text-[#F6F1E7]"
-                          : "bg-surface border border-border text-muted"
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-foreground">
-                        {opt.label}
-                      </div>
-                      <div className="text-[11px] text-muted mt-0.5 leading-snug">
-                        {opt.desc}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <label
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              className={`flex-1 w-full cursor-pointer p-8 rounded-2xl border transition-all flex flex-col items-center justify-center text-center gap-2.5 ${
-                isDragging
-                  ? "bg-[#B85D3B]/20 border-[#B85D3B] scale-[1.01]"
-                  : "bg-background hover:bg-[#B85D3B]/10 border-border hover:border-[#B85D3B]/40"
-              }`}
-            >
-              <Upload className="w-8 h-8 text-[#B85D3B]" />
-              <div className="text-sm font-serif font-bold">
-                {isParsingFile
-                  ? parsingStatus || "Dosya Dönüştürülüyor..."
-                  : ".pdf, .epub, .txt veya .md Dosyası Seçin / Sürükleyin"}
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-muted">
-                <span className="px-2 py-0.5 rounded bg-[#B85D3B]/15 text-[#B85D3B] font-semibold">
-                  PDF
-                </span>
-                <span className="px-2 py-0.5 rounded bg-[#5C6B57]/15 text-[#5C6B57] font-semibold">
-                  EPUB
-                </span>
-                <span className="px-2 py-0.5 rounded bg-surface border border-border text-foreground font-semibold">
-                  TXT / MD
-                </span>
-                <span>sayfa numaraları ve tirelemeler otomatik temizlenir</span>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.epub,.txt,.md,.markdown,application/pdf,application/epub+zip,text/plain,text/markdown"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </label>
-          </div>
-
-          <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-            <span className="text-xs text-muted">
-              Hızlı Test: Hazır örnek PDF veya Markdown dosyasını tek tıkla
-              dönüştürüp deneyebilirsiniz:
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={isParsingFile}
-                onClick={async () => {
-                  const res = await fetch("/ornek-hizli-okuma-kitabi.pdf");
-                  const blob = await res.blob();
-                  const samplePdf = new File(
-                    [blob],
-                    "ornek-hizli-okuma-kitabi.pdf",
-                    { type: "application/pdf" }
-                  );
-                  await processUploadedFile(samplePdf);
-                }}
-                className="px-3 py-1.5 rounded-xl bg-[#B85D3B]/15 hover:bg-[#B85D3B]/25 border border-[#B85D3B]/30 text-[#B85D3B] text-xs font-semibold transition-all"
-              >
-                Örnek PDF Dönüştür (.pdf)
-              </button>
-              <button
-                type="button"
-                disabled={isParsingFile}
-                onClick={async () => {
-                  const res = await fetch("/ornek-kitap.md");
-                  const blob = await res.blob();
-                  const sampleMd = new File([blob], "ornek-kitap.md", {
-                    type: "text/markdown",
-                  });
-                  await processUploadedFile(sampleMd);
-                }}
-                className="px-3 py-1.5 rounded-xl bg-[#5C6B57]/15 hover:bg-[#5C6B57]/25 border border-[#5C6B57]/30 text-[#5C6B57] text-xs font-semibold transition-all"
-              >
-                Örnek Markdown Dönüştür (.md)
-              </button>
-            </div>
-          </div>
-
-          {uploadError && (
-            <p className="text-xs text-[#B85D3B] font-medium">{uploadError}</p>
-          )}
-        </div>
+        <BookUploadPanel
+          visibility={uploadVisibility}
+          onVisibilityChange={setUploadVisibility}
+          isDragging={isDragging}
+          onDraggingChange={setIsDragging}
+          onDrop={handleDrop}
+          isParsing={isParsingFile}
+          parsingStatus={parsingStatus}
+          error={uploadError}
+          fileInputRef={fileInputRef}
+          onFileChange={handleFileChange}
+          onProcessFile={processUploadedFile}
+          onClose={() => setShowUploadModal(false)}
+        />
       )}
 
       {/* Category Filter Pills */}
