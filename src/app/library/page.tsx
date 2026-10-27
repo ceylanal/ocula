@@ -27,6 +27,7 @@ import { tokenizeParagraphs } from "@/lib/textUtils";
 import { RsvpEngine } from "@/components/drills/RsvpEngine";
 import { MagicPacerEngine } from "@/components/drills/MagicPacerEngine";
 import { BookComprehensionQuiz } from "@/components/BookComprehensionQuizModal";
+import { PiperNeuralAudioBar } from "@/components/PiperNeuralAudioBar";
 import { getSupabaseClient, pushStateToSupabase } from "@/lib/supabase";
 
 const FONT_CLASS_MAP: Record<FontFamily, string> = {
@@ -567,6 +568,43 @@ function LibraryAndReaderContent() {
             )}
           </div>
         )}
+
+        {/* Piper Neural TTS (Offline AI Audio) Engine Bar */}
+        <PiperNeuralAudioBar
+          bookId={activeBook.id}
+          bookTitle={activeBook.title}
+          bookAuthor={activeBook.author}
+          words={tokenizedActiveBook.words}
+          currentWordIndex={currentWordIndex}
+          wpm={currentWpm}
+          autoRampEnabled={readerPrefs.autoRampEnabled}
+          onWordIndexSync={(wordIdx) => {
+            updateReadingProgress(
+              activeBook.id,
+              wordIdx,
+              readingMode,
+              currentWpm
+            );
+          }}
+          onWpmChange={(newWpm, rampNotice) => {
+            if (rampNotice) setHeaderRampBanner(rampNotice);
+            updateReadingProgress(
+              activeBook.id,
+              currentWordIndex,
+              readingMode,
+              newWpm
+            );
+          }}
+          onSessionSave={({ wordIndex, wordsRead, durationSeconds, finalWpm }) => {
+            handlePersistReadingSession({
+              wordIndex,
+              wordsRead,
+              durationSeconds,
+              finalWpm,
+              mode: readingMode,
+            });
+          }}
+        />
 
         {/* Main Reader Layout (with collapsible Notes Sidebar) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
