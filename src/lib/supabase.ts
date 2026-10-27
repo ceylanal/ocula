@@ -1,6 +1,8 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { isUuid } from "@/lib/ids";
 import {
   Book,
+  BookNote,
   ExerciseLog,
   UserProfile,
   UserReadingProgress,
@@ -37,14 +39,22 @@ export interface SyncPayload {
   books: Book[];
   exerciseLogs: ExerciseLog[];
   readingProgress: Record<string, UserReadingProgress>;
+  bookNotes: BookNote[];
 }
 
 const NO_SESSION_MESSAGE =
   "Bulut eşitlemesi için Supabase hesabıyla giriş yapılmış olmalıdır. Veriler yalnızca bu cihazda saklanıyor.";
 
-async function getSessionUserId(client: SupabaseClient): Promise<string | null> {
+export async function getSessionUserId(client: SupabaseClient): Promise<string | null> {
   const { data } = await client.auth.getSession();
   return data.session?.user.id ?? null;
+}
+
+/** PostgREST hataları `Error` örneği değildir; mesajı korunarak Error'a çevrilir. */
+export function toError(err: unknown): Error {
+  if (err instanceof Error) return err;
+  const message = (err as { message?: string } | null)?.message;
+  return new Error(message || "Bilinmeyen Supabase hatası");
 }
 
 /**
@@ -83,6 +93,21 @@ export async function pushStateToSupabase(
       { onConflict: "id" }
     );
     if (userErr) throw userErr;
+
+    // 1b. Topluluğa açık profil (notlar ve gönderiler profiles tablosuna bağlıdır)
+    const displayName = payload.user.name.trim().slice(0, 60) || "Okur";
+    const { error: profileErr } = await client.from("profiles").upsert(
+      {
+        id: uid,
+        display_name: displayName,
+        current_wpm:
+          payload.user.current_wpm >= 0 && payload.user.current_wpm <= 1500
+            ? payload.user.current_wpm
+            : null,
+      },
+      { onConflict: "id" }
+    );
+    if (profileErr) throw profileErr;
 
     // 2. Upsert user-uploaded books
     const booksToUpsert = payload.books
@@ -148,6 +173,28 @@ export async function pushStateToSupabase(
       if (progErr) throw progErr;
     }
 
+    // 5. Upsert personal notes & highlights (yalnızca uuid kimlikli kayıtlar)
+    const notesToUpsert = payload.bookNotes
+      .filter((n) => isUuid(n.id))
+      .map((n) => ({
+        id: n.id,
+        user_id: uid,
+        book_id: n.book_id,
+        word_index: n.word_index,
+        type: n.type || "note",
+        selected_text: n.selected_text?.slice(0, 2000) ?? null,
+        content: n.content.slice(0, 4000),
+        is_public: Boolean(n.is_public),
+        author_wpm: n.author_wpm ?? null,
+        created_at: n.created_at,
+      }));
+    if (notesToUpsert.length > 0) {
+      const { error: noteErr } = await client
+        .from("annotations")
+        .upsert(notesToUpsert, { onConflict: "id" });
+      if (noteErr) throw noteErr;
+    }
+
     return {
       ok: true,
       message:
@@ -181,7 +228,7 @@ export async function pullStateFromSupabase(
     const uid = (await getSessionUserId(client)) || fallbackUserId || null;
     if (!uid) return { ok: false, message: NO_SESSION_MESSAGE };
 
-    const [userRes, booksRes, logsRes, progRes] = await Promise.all([
+    const [userRes, booksRes, logsRes, progRes, notesRes] = await Promise.all([
       client.from("users").select("*").eq("id", uid).maybeSingle(),
       client
         .from("books")
@@ -194,12 +241,18 @@ export async function pullStateFromSupabase(
         .eq("user_id", uid)
         .order("completed_at", { ascending: true }),
       client.from("user_reading_progress").select("*").eq("user_id", uid),
+      client
+        .from("annotations")
+        .select("*")
+        .eq("user_id", uid)
+        .order("created_at", { ascending: false }),
     ]);
 
     if (userRes.error) throw userRes.error;
     if (booksRes.error) throw booksRes.error;
     if (logsRes.error) throw logsRes.error;
     if (progRes.error) throw progRes.error;
+    if (notesRes.error) throw notesRes.error;
 
     const progressMap: Record<string, UserReadingProgress> = {};
     (progRes.data || []).forEach((row) => {
@@ -229,6 +282,21 @@ export async function pullStateFromSupabase(
             : undefined,
         readingProgress:
           Object.keys(progressMap).length > 0 ? progressMap : undefined,
+        bookNotes:
+          notesRes.data && notesRes.data.length > 0
+            ? notesRes.data.map((row) => ({
+                id: row.id,
+                user_id: row.user_id,
+                book_id: row.book_id,
+                word_index: row.word_index,
+                selected_text: row.selected_text ?? undefined,
+                content: row.content,
+                created_at: row.created_at,
+                type: row.type,
+                is_public: row.is_public,
+                author_wpm: row.author_wpm ?? undefined,
+              }))
+            : undefined,
       },
     };
   } catch (err: unknown) {

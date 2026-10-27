@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Users,
@@ -16,8 +16,19 @@ import {
   Highlighter,
   Plus,
   Compass,
+  Trash2,
+  RefreshCw,
+  LogIn,
+  AlertTriangle,
 } from "lucide-react";
 import { useOkurLabStore } from "@/store/useOkurLabStore";
+import { ActionResult, useCommunityStore } from "@/store/useCommunityStore";
+
+const OPEN_AUTH_EVENT = "okurlab:open-auth";
+
+function initials(name: string): string {
+  return (name.trim().slice(0, 1) || "O").toLocaleUpperCase("tr-TR");
+}
 
 export default function CommunityOkurSalonuPage() {
   const {
@@ -25,15 +36,38 @@ export default function CommunityOkurSalonuPage() {
     books,
     communityBooks,
     readingProgress,
-    communityReviews,
-    communityQuotes,
-    addCommunityReview,
-    toggleReviewLike,
-    addReviewComment,
-    addCommunityQuotePost,
-    toggleQuoteLike,
-    addQuoteComment,
+    isAuthenticated,
+    supabaseUrl,
+    supabaseAnonKey,
   } = useOkurLabStore();
+  const {
+    status,
+    loading,
+    error,
+    reviews,
+    quotes,
+    loadFeed,
+    publishReview,
+    publishQuote,
+    removePost,
+    toggleLike,
+    postComment,
+    removeComment,
+  } = useCommunityStore();
+
+  const [actionError, setActionError] = useState<string | null>(null);
+  const ready = status === "ready";
+
+  // Oturum, hesap veya bağlantı ayarı değiştiğinde akışı yeniden çek
+  useEffect(() => {
+    loadFeed();
+  }, [loadFeed, user.id, isAuthenticated, supabaseUrl, supabaseAnonKey]);
+
+  // Başarısız işlemin nedenini göster; başarılıysa hatayı temizle
+  const handleResult = (result: ActionResult): boolean => {
+    setActionError(result.ok ? null : result.message);
+    return result.ok;
+  };
 
   const [activeFilter, setActiveFilter] = useState<
     "all" | "reviews" | "quotes"
@@ -55,7 +89,7 @@ export default function CommunityOkurSalonuPage() {
 
   // Review composer state
   const [selectedBookId, setSelectedBookId] = useState<string>(
-    allBooks[0]?.id || "comm-book-kafka"
+    allBooks[0]?.id || ""
   );
   const [rating, setRating] = useState<number>(5);
   const [reviewText, setReviewText] = useState<string>("");
@@ -70,18 +104,12 @@ export default function CommunityOkurSalonuPage() {
   );
   const [expandedComments, setExpandedComments] = useState<
     Record<string, boolean>
-  >({
-    "rev-1": true,
-    "quote-1": true,
-  });
+  >({});
 
   const selectedBookMeta = useMemo(
     () =>
-      allBooks.find((b) => b.id === selectedBookId) || {
-        id: "comm-book-kafka",
-        title: "Dönüşüm (Metamorfoz)",
-        author: "Franz Kafka",
-      },
+      allBooks.find((b) => b.id === selectedBookId) ||
+      allBooks[0] || { id: "", title: "Kitap", author: "" },
     [allBooks, selectedBookId]
   );
 
@@ -90,25 +118,31 @@ export default function CommunityOkurSalonuPage() {
     user.current_wpm ||
     280;
 
-  const handlePublishReview = (e: React.FormEvent) => {
+  const handlePublishReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reviewText.trim()) return;
-    addCommunityReview({
+    if (!reviewText.trim() || !selectedBookMeta.id) return;
+    const result = await publishReview({
       book_id: selectedBookMeta.id,
+      book_title: selectedBookMeta.title,
+      book_author: selectedBookMeta.author,
       rating,
       achieved_wpm: selectedBookWpm,
       review_text: reviewText.trim(),
     });
-    setReviewText("");
-    setShowComposer(false);
-    setActiveFilter("all");
+    if (handleResult(result)) {
+      setReviewText("");
+      setShowComposer(false);
+      setActiveFilter("all");
+    }
   };
 
-  const handlePublishQuote = (e: React.FormEvent) => {
+  const handlePublishQuote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quoteText.trim()) return;
-    addCommunityQuotePost({
+    if (!quoteText.trim() || !selectedBookMeta.id) return;
+    const result = await publishQuote({
       book_id: selectedBookMeta.id,
+      book_title: selectedBookMeta.title,
+      book_author: selectedBookMeta.author,
       quote_text: quoteText.trim(),
       note_comment:
         quoteNoteText.trim() ||
@@ -116,10 +150,12 @@ export default function CommunityOkurSalonuPage() {
       word_index:
         readingProgress[selectedBookMeta.id]?.current_word_index ?? 0,
     });
-    setQuoteText("");
-    setQuoteNoteText("");
-    setShowComposer(false);
-    setActiveFilter("all");
+    if (handleResult(result)) {
+      setQuoteText("");
+      setQuoteNoteText("");
+      setShowComposer(false);
+      setActiveFilter("all");
+    }
   };
 
   const formatDate = (iso: string) => {
@@ -143,7 +179,7 @@ export default function CommunityOkurSalonuPage() {
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#B85D3B]/15 border border-[#B85D3B]/30 text-xs font-bold text-[#B85D3B]">
               <Feather className="w-3.5 h-3.5" />
-              <span>OkurLab Edebiyat &amp; Hız Kulübü • Sayı #14</span>
+              <span>OkurLab Edebiyat &amp; Hız Kulübü</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-serif font-bold tracking-tight text-foreground">
               Okur Salonu
@@ -163,8 +199,17 @@ export default function CommunityOkurSalonuPage() {
 
           <div className="flex flex-wrap items-center gap-3 shrink-0">
             <button
+              onClick={() => loadFeed()}
+              disabled={loading}
+              title="Akışı yenile"
+              className="p-3 rounded-2xl bg-background hover:bg-surface-elevated border border-border text-foreground disabled:opacity-50 transition-all"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <button
               onClick={() => setShowComposer((prev) => !prev)}
-              className="px-5 py-3 rounded-2xl bg-[#B85D3B] hover:bg-[#A14D2E] text-[#F6F1E7] text-xs sm:text-sm font-bold flex items-center gap-2 shadow-md shadow-[#B85D3B]/20 transition-all"
+              disabled={!ready}
+              className="px-5 py-3 rounded-2xl bg-[#B85D3B] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#A14D2E] text-[#F6F1E7] text-xs sm:text-sm font-bold flex items-center gap-2 shadow-md shadow-[#B85D3B]/20 transition-all"
             >
               <Plus className="w-4 h-4" />
               <span>İnceleme veya Alıntı Kartı Paylaş</span>
@@ -188,17 +233,17 @@ export default function CommunityOkurSalonuPage() {
                 {
                   id: "all",
                   label: "Tüm Edebi Akış",
-                  count: communityReviews.length + communityQuotes.length,
+                  count: reviews.length + quotes.length,
                 },
                 {
                   id: "reviews",
                   label: "Kitap İncelemeleri & WPM Rozetleri",
-                  count: communityReviews.length,
+                  count: reviews.length,
                 },
                 {
                   id: "quotes",
                   label: "Popüler Altı Çizili Alıntı Kartları",
-                  count: communityQuotes.length,
+                  count: quotes.length,
                 },
               ] as const
             ).map((tab) => (
@@ -240,6 +285,54 @@ export default function CommunityOkurSalonuPage() {
           </div>
         </div>
       </header>
+
+      {/* Bağlantı / oturum durumu ve hatalar */}
+      {status === "unconfigured" && (
+        <div
+          role="status"
+          className="p-5 rounded-3xl bg-surface border border-border flex items-start gap-3 text-sm"
+        >
+          <AlertTriangle className="w-5 h-5 text-[#B85D3B] shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-serif font-bold">Topluluk bağlantısı kurulmamış</div>
+            <p className="text-muted leading-relaxed">
+              Okur Salonu, Supabase üzerinde çalışır. Profil menüsünden bulut
+              bağlantısını (Project URL ve Anon Key) tanımla, ardından hesabınla
+              giriş yap.
+            </p>
+          </div>
+        </div>
+      )}
+      {status === "signed_out" && (
+        <div
+          role="status"
+          className="p-5 rounded-3xl bg-surface border border-border flex flex-wrap items-center justify-between gap-4 text-sm"
+        >
+          <div className="space-y-1">
+            <div className="font-serif font-bold">Okur Salonu&apos;nu görmek için giriş yap</div>
+            <p className="text-muted leading-relaxed">
+              İncelemeler ve alıntı kartları yalnızca Supabase hesabıyla giriş
+              yapmış okurlara açıktır. Yerel demo hesaplarla topluluğa yazılamaz.
+            </p>
+          </div>
+          <button
+            onClick={() => window.dispatchEvent(new Event(OPEN_AUTH_EVENT))}
+            className="px-5 py-3 rounded-2xl bg-[#B85D3B] hover:bg-[#A14D2E] text-[#F6F1E7] text-xs font-bold flex items-center gap-2 shrink-0"
+          >
+            <LogIn className="w-4 h-4" />
+            <span>Giriş Yap</span>
+          </button>
+        </div>
+      )}
+      {(error || actionError) && (
+        <div
+          role="alert"
+          className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/40 text-sm flex items-start gap-2"
+        >
+          <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+          <span className="leading-relaxed">{actionError || error}</span>
+        </div>
+      )}
 
       {/* Expandable Literary Composer (Publish Review or Quote Card) */}
       {showComposer && (
@@ -420,12 +513,17 @@ export default function CommunityOkurSalonuPage() {
                 </h2>
               </div>
               <span className="text-xs text-muted font-serif italic">
-                {communityReviews.length} inceleme
+                {reviews.length} inceleme
               </span>
             </div>
 
             <div className="space-y-5">
-              {communityReviews.map((rev) => {
+              {ready && !loading && reviews.length === 0 && (
+                <p className="p-6 rounded-3xl bg-surface border border-dashed border-border text-sm text-muted text-center font-serif italic">
+                  Henüz inceleme yok. İlk incelemeyi sen yaz.
+                </p>
+              )}
+              {reviews.map((rev) => {
                 const isExpanded = Boolean(expandedComments[rev.id]);
                 const draft = commentDrafts[rev.id] || "";
 
@@ -438,7 +536,7 @@ export default function CommunityOkurSalonuPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3.5">
                         <div className="w-11 h-11 rounded-2xl bg-[#B85D3B]/15 border border-[#B85D3B]/35 text-[#B85D3B] font-serif font-bold text-sm flex items-center justify-center shrink-0">
-                          {rev.user_avatar}
+                          {initials(rev.user_name)}
                         </div>
                         <div className="space-y-1">
                           <p className="text-sm font-serif leading-snug text-foreground">
@@ -488,7 +586,7 @@ export default function CommunityOkurSalonuPage() {
                     <div className="flex items-center justify-between pt-1 text-xs">
                       <div className="flex items-center gap-2.5">
                         <button
-                          onClick={() => toggleReviewLike(rev.id)}
+                          onClick={async () => handleResult(await toggleLike("review", rev.id))}
                           className={`px-3 py-1.5 rounded-xl border font-bold flex items-center gap-1.5 transition-all ${
                             rev.liked_by_me
                               ? "bg-[#B85D3B] text-[#F6F1E7] border-[#B85D3B]"
@@ -516,6 +614,18 @@ export default function CommunityOkurSalonuPage() {
                         </button>
                       </div>
 
+                      <div className="flex items-center gap-3">
+                        {rev.user_id === user.id && (
+                          <button
+                            onClick={async () =>
+                              handleResult(await removePost("review", rev.id))
+                            }
+                            className="text-xs text-muted hover:text-[#B85D3B] flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Sil</span>
+                          </button>
+                        )}
                       <Link
                         href={`/library?book=${rev.book_id}&mode=pacer`}
                         className="text-xs font-bold text-[#B85D3B] hover:underline flex items-center gap-1"
@@ -523,6 +633,7 @@ export default function CommunityOkurSalonuPage() {
                         <BookOpen className="w-3.5 h-3.5" />
                         <span>Kitabı Pacer İle Oku &rarr;</span>
                       </Link>
+                      </div>
                     </div>
 
                     {/* Comments Section */}
@@ -538,12 +649,23 @@ export default function CommunityOkurSalonuPage() {
                                 <span className="font-serif font-bold text-foreground">
                                   {c.author_name}
                                 </span>
-                                <span className="px-1.5 py-0.5 rounded bg-[#5C6B57]/15 text-[#5C6B57] text-[10px] font-bold">
-                                  OkurLab
-                                </span>
                               </div>
-                              <span className="text-[10px] text-muted">
+                              <span className="flex items-center gap-2 text-[10px] text-muted">
                                 {formatDate(c.created_at)}
+                                {(c.user_id === user.id ||
+                                  rev.user_id === user.id) && (
+                                  <button
+                                    onClick={async () =>
+                                      handleResult(
+                                        await removeComment("review", rev.id, c.id)
+                                      )
+                                    }
+                                    title="Yorumu sil"
+                                    className="hover:text-[#B85D3B]"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
                               </span>
                             </div>
                             <p className="text-foreground/90 leading-relaxed">
@@ -553,14 +675,18 @@ export default function CommunityOkurSalonuPage() {
                         ))}
 
                         <form
-                          onSubmit={(e) => {
+                          onSubmit={async (e) => {
                             e.preventDefault();
                             if (!draft.trim()) return;
-                            addReviewComment(rev.id, draft);
-                            setCommentDrafts((prev) => ({
-                              ...prev,
-                              [rev.id]: "",
-                            }));
+                            const ok = handleResult(
+                              await postComment("review", rev.id, draft)
+                            );
+                            if (ok) {
+                              setCommentDrafts((prev) => ({
+                                ...prev,
+                                [rev.id]: "",
+                              }));
+                            }
                           }}
                           className="flex items-center gap-2"
                         >
@@ -610,12 +736,17 @@ export default function CommunityOkurSalonuPage() {
                 </h2>
               </div>
               <span className="text-xs text-muted font-serif italic">
-                {communityQuotes.length} alıntı kartı
+                {quotes.length} alıntı kartı
               </span>
             </div>
 
             <div className="space-y-5">
-              {communityQuotes.map((q) => {
+              {ready && !loading && quotes.length === 0 && (
+                <p className="p-6 rounded-3xl bg-surface border border-dashed border-border text-sm text-muted text-center font-serif italic">
+                  Henüz alıntı kartı yok. Okurken bir cümle seçip paylaşabilirsin.
+                </p>
+              )}
+              {quotes.map((q) => {
                 const isExpanded = Boolean(expandedComments[q.id]);
                 const draft = commentDrafts[q.id] || "";
 
@@ -673,7 +804,7 @@ export default function CommunityOkurSalonuPage() {
                     <div className="flex items-center justify-between pt-1 text-xs">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => toggleQuoteLike(q.id)}
+                          onClick={async () => handleResult(await toggleLike("quote_post", q.id))}
                           className={`px-3 py-1.5 rounded-xl border font-bold flex items-center gap-1.5 transition-all ${
                             q.liked_by_me
                               ? "bg-[#B85D3B] text-[#F6F1E7] border-[#B85D3B]"
@@ -701,8 +832,19 @@ export default function CommunityOkurSalonuPage() {
                         </button>
                       </div>
 
-                      <span className="text-[11px] text-muted">
+                      <span className="flex items-center gap-2 text-[11px] text-muted">
                         {formatDate(q.created_at)}
+                        {q.user_id === user.id && (
+                          <button
+                            onClick={async () =>
+                              handleResult(await removePost("quote_post", q.id))
+                            }
+                            title="Alıntıyı sil"
+                            className="hover:text-[#B85D3B]"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </span>
                     </div>
 
@@ -719,12 +861,23 @@ export default function CommunityOkurSalonuPage() {
                                 <span className="font-serif font-bold text-foreground">
                                   {c.author_name}
                                 </span>
-                                <span className="px-1.5 py-0.5 rounded bg-[#5C6B57]/15 text-[#5C6B57] text-[10px] font-bold">
-                                  OkurLab
-                                </span>
                               </div>
-                              <span className="text-[10px] text-muted">
+                              <span className="flex items-center gap-2 text-[10px] text-muted">
                                 {formatDate(c.created_at)}
+                                {(c.user_id === user.id ||
+                                  q.user_id === user.id) && (
+                                  <button
+                                    onClick={async () =>
+                                      handleResult(
+                                        await removeComment("quote_post", q.id, c.id)
+                                      )
+                                    }
+                                    title="Yorumu sil"
+                                    className="hover:text-[#B85D3B]"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
                               </span>
                             </div>
                             <p className="text-foreground/90 leading-relaxed">
@@ -734,14 +887,18 @@ export default function CommunityOkurSalonuPage() {
                         ))}
 
                         <form
-                          onSubmit={(e) => {
+                          onSubmit={async (e) => {
                             e.preventDefault();
                             if (!draft.trim()) return;
-                            addQuoteComment(q.id, draft);
-                            setCommentDrafts((prev) => ({
-                              ...prev,
-                              [q.id]: "",
-                            }));
+                            const ok = handleResult(
+                              await postComment("quote_post", q.id, draft)
+                            );
+                            if (ok) {
+                              setCommentDrafts((prev) => ({
+                                ...prev,
+                                [q.id]: "",
+                              }));
+                            }
                           }}
                           className="flex items-center gap-2"
                         >

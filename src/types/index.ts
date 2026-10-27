@@ -28,6 +28,8 @@ export interface BookNote {
   type?: "highlight" | "note";
   is_public?: boolean;
   likes_count?: number;
+  user_id?: string;
+  liked_by_me?: boolean;
 }
 
 export interface Book {
@@ -50,6 +52,7 @@ export interface Book {
 
 export interface CommunityComment {
   id: string;
+  user_id?: string;
   author_name: string;
   content: string;
   created_at: string;
@@ -119,6 +122,18 @@ export interface SpeedTestArticle {
   word_count: number;
   paragraphs: string[];
   questions: ComprehensionQuestion[];
+}
+
+export interface CalibrationRecord {
+  id: string;
+  article_id: string;
+  article_title: string;
+  difficulty: SpeedTestArticle["difficulty"];
+  wpm: number;
+  comprehension: number; // Percentage (0-100)
+  effective_wpm: number; // wpm × comprehension
+  duration_seconds: number;
+  completed_at: string; // ISO date string
 }
 
 export interface DailyTask {

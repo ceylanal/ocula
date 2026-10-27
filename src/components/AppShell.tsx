@@ -108,6 +108,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
+  // Okur Salonu gibi sayfalar giriş modalını bu olayla açar
+  useEffect(() => {
+    const open = () => setAuthModalOpen(true);
+    window.addEventListener("okurlab:open-auth", open);
+    return () => window.removeEventListener("okurlab:open-auth", open);
+  }, []);
+
   const activeTheme: ThemeMode = mounted ? theme || "sepia" : "sepia";
 
   useEffect(() => {
@@ -127,6 +134,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         books,
         exerciseLogs,
         readingProgress,
+        bookNotes: useOkurLabStore.getState().bookNotes,
       }).catch(() => {});
     }, 1800);
     return () => clearTimeout(timer);

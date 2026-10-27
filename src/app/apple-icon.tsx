@@ -18,41 +18,47 @@ export default function AppleIcon() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "#B85D3B",
-          borderRadius: "42px",
-          color: "#F6F1E7",
+          background: "#F2EBD9",
+          border: "6px solid #D5C5AA",
+          borderRadius: "40px",
+          color: "#382618",
+          fontFamily: "serif",
         }}
       >
-        {/* Minimalist Floating Focus Dot */}
+        {/* Terracotta Focus Ring & Dot */}
         <div
           style={{
-            width: "24px",
-            height: "24px",
-            borderRadius: "999px",
-            background: "#F6F1E7",
-            marginBottom: "10px",
-          }}
-        />
-        {/* Clean Open Book Silhouette */}
-        <div
-          style={{
-            width: "96px",
+            width: "54px",
             height: "54px",
-            borderRadius: "14px",
-            border: "8px solid #F6F1E7",
-            background: "rgba(246, 241, 231, 0.16)",
+            borderRadius: "999px",
+            border: "5px solid #B85D3B",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            marginBottom: "8px",
           }}
         >
           <div
             style={{
-              width: "6px",
-              height: "100%",
-              background: "#F6F1E7",
+              width: "22px",
+              height: "22px",
+              borderRadius: "999px",
+              background: "#B85D3B",
             }}
           />
+        </div>
+        {/* Wordmark */}
+        <div
+          style={{
+            fontSize: "32px",
+            fontWeight: 800,
+            letterSpacing: "-0.5px",
+            lineHeight: 1,
+            display: "flex",
+          }}
+        >
+          <span style={{ color: "#382618" }}>Okur</span>
+          <span style={{ color: "#B85D3B", fontWeight: 400 }}>Lab</span>
         </div>
       </div>
     ),

@@ -105,6 +105,7 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
           books: latest.books,
           exerciseLogs: latest.exerciseLogs,
           readingProgress: latest.readingProgress,
+          bookNotes: latest.bookNotes,
         });
         if (!pushRes.ok) {
           setSyncStatus({ ok: false, text: pushRes.message });
@@ -124,10 +125,9 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
   const handleEmailPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = emailInput.trim() || user.email;
+    // Giriş yaparken görünen ad değiştirilmez; yalnızca kayıtta girilen ad kullanılır.
     const cleanName =
-      mode === "register" && nameInput.trim()
-        ? nameInput.trim()
-        : cleanEmail.split("@")[0];
+      mode === "register" && nameInput.trim() ? nameInput.trim() : "";
 
     setLoading(true);
     setSyncStatus(null);
@@ -143,7 +143,7 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
             ? await client.auth.signUp({
                 email: cleanEmail,
                 password: passwordInput,
-                options: { data: { full_name: cleanName } },
+                options: { data: { full_name: cleanName || cleanEmail.split("@")[0] } },
               })
             : await client.auth.signInWithPassword({
                 email: cleanEmail,
@@ -257,6 +257,10 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
                   type="button"
                   onClick={() => {
                     logoutAccount();
+                    // Supabase oturumu da kapatılır; aksi halde sonraki yerel hesap bu oturumla yazabilirdi
+                    getSupabaseClient(supabaseUrl, supabaseAnonKey)
+                      ?.auth.signOut()
+                      .catch(() => {});
                     setSyncStatus({
                       ok: true,
                       text: "Oturum kapatıldı. Verileriniz hesabınızda güvende.",

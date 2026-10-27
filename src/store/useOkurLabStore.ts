@@ -6,6 +6,7 @@ import {
   Book,
   BookNote,
   BookVisibility,
+  CalibrationRecord,
   CommunityQuotePost,
   CommunityReview,
   ComprehensionQuestion,
@@ -21,9 +22,6 @@ import {
 import {
   INITIAL_BOOKS,
   INITIAL_COMMUNITY_BOOKS,
-  INITIAL_COMMUNITY_MARGINALIA,
-  INITIAL_COMMUNITY_QUOTES,
-  INITIAL_COMMUNITY_REVIEWS,
   INITIAL_DAILY_TASKS,
   INITIAL_EXERCISE_LOGS,
   INITIAL_USER_PROFILE,
@@ -58,6 +56,7 @@ interface OkurLabState {
   communityQuotes: CommunityQuotePost[];
   lastActiveBookId: string;
   exerciseLogs: ExerciseLog[];
+  calibrationHistory: CalibrationRecord[];
   dailyTasks: DailyTask[];
   readingProgress: Record<string, UserReadingProgress>;
   bookNotes: BookNote[];
@@ -98,6 +97,10 @@ interface OkurLabState {
     duration_seconds: number;
     label?: string;
   }) => void;
+  addCalibrationRecord: (
+    record: Omit<CalibrationRecord, "id" | "completed_at">
+  ) => CalibrationRecord;
+  applyCalibratedWpm: (calibratedWpm: number) => void;
   recordReadingSession: (params: {
     bookId: string;
     wordIndex: number;
@@ -137,7 +140,7 @@ interface OkurLabState {
     content: string;
     type?: "highlight" | "note";
     is_public?: boolean;
-  }) => void;
+  }) => BookNote;
   deleteBookNote: (noteId: string) => void;
   toggleMarginaliaLike: (noteId: string) => void;
   addCommunityReview: (params: {
@@ -174,11 +177,12 @@ export const useOkurLabStore = create<OkurLabState>()(
         owner_name: INITIAL_USER_PROFILE.name,
       })),
       communityBooks: INITIAL_COMMUNITY_BOOKS,
-      communityMarginalia: INITIAL_COMMUNITY_MARGINALIA,
-      communityReviews: INITIAL_COMMUNITY_REVIEWS,
-      communityQuotes: INITIAL_COMMUNITY_QUOTES,
+      communityMarginalia: [],
+      communityReviews: [],
+      communityQuotes: [],
       lastActiveBookId: INITIAL_BOOKS[0]?.id || "book-neuro-focus",
       exerciseLogs: INITIAL_EXERCISE_LOGS,
+      calibrationHistory: [],
       dailyTasks: INITIAL_DAILY_TASKS,
       dailyReadingMinutes: 15,
       dailyReadingGoalMinutes: 20,
@@ -374,6 +378,37 @@ export const useOkurLabStore = create<OkurLabState>()(
             exerciseLogs: updatedLogs,
             user: updatedUser,
             dailyTasks: updatedTasks,
+          };
+        });
+      },
+
+      addCalibrationRecord: (record) => {
+        const entry: CalibrationRecord = {
+          ...record,
+          id: `cal-${Date.now()}`,
+          completed_at: new Date().toISOString(),
+        };
+        set((state) => ({
+          calibrationHistory: [entry, ...state.calibrationHistory].slice(0, 30),
+        }));
+        return entry;
+      },
+
+      applyCalibratedWpm: (calibratedWpm) => {
+        const clean = Math.max(80, Math.min(1200, Math.round(calibratedWpm)));
+        set((state) => {
+          const updatedProgress: Record<string, UserReadingProgress> = {};
+          for (const [bookId, prog] of Object.entries(state.readingProgress)) {
+            updatedProgress[bookId] = {
+              ...prog,
+              preferred_wpm: clean,
+              updated_at: new Date().toISOString(),
+            };
+          }
+          return {
+            user: { ...state.user, current_wpm: clean },
+            readerPrefs: { ...state.readerPrefs, defaultWpm: clean },
+            readingProgress: updatedProgress,
           };
         });
       },
@@ -654,28 +689,30 @@ export const useOkurLabStore = create<OkurLabState>()(
         content,
         type = "note",
         is_public = true,
-      }) =>
-        set((state) => {
-          const newNote: BookNote = {
-            id: `note-${Date.now()}`,
-            book_id,
-            word_index,
-            selected_text,
-            content,
-            created_at: new Date().toISOString(),
-            author_name: state.user.name,
-            author_wpm: state.user.current_wpm,
-            type,
-            is_public,
-            likes_count: 1,
-          };
-          return {
-            bookNotes: [newNote, ...state.bookNotes],
-            communityMarginalia: is_public
-              ? [newNote, ...state.communityMarginalia]
-              : state.communityMarginalia,
-          };
-        }),
+      }) => {
+        const state = get();
+        const newNote: BookNote = {
+          id: `note-${Date.now()}`,
+          user_id: state.user.id,
+          book_id,
+          word_index,
+          selected_text,
+          content,
+          created_at: new Date().toISOString(),
+          author_name: state.user.name,
+          author_wpm: state.user.current_wpm,
+          type,
+          is_public,
+          likes_count: 1,
+        };
+        set({
+          bookNotes: [newNote, ...state.bookNotes],
+          communityMarginalia: is_public
+            ? [newNote, ...state.communityMarginalia]
+            : state.communityMarginalia,
+        });
+        return newNote;
+      },
 
       deleteBookNote: (noteId) =>
         set((state) => ({
@@ -820,11 +857,12 @@ export const useOkurLabStore = create<OkurLabState>()(
           user: { ...INITIAL_USER_PROFILE, auth_provider: "email" },
           books: INITIAL_BOOKS,
           communityBooks: INITIAL_COMMUNITY_BOOKS,
-          communityMarginalia: INITIAL_COMMUNITY_MARGINALIA,
-          communityReviews: INITIAL_COMMUNITY_REVIEWS,
-          communityQuotes: INITIAL_COMMUNITY_QUOTES,
+          communityMarginalia: [],
+          communityReviews: [],
+          communityQuotes: [],
           lastActiveBookId: INITIAL_BOOKS[0]?.id || "book-neuro-focus",
           exerciseLogs: INITIAL_EXERCISE_LOGS,
+          calibrationHistory: [],
           dailyTasks: INITIAL_DAILY_TASKS,
           dailyReadingMinutes: 15,
           dailyWordsRead: 3200,

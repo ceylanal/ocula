@@ -1,14 +1,21 @@
-<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="120" height="120" rx="30" fill="#B85D3B" />
-  <path
-    d="M24 44C37.5 44 51 50 60 61C69 50 82.5 44 96 44V82C82.5 82 69 87.2 60 97C51 87.2 37.5 82 24 82V44Z"
-    fill="#F6F1E7"
-    fill-opacity="0.18"
-    stroke="#F6F1E7"
-    stroke-width="7.5"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
-  <path d="M60 61V96" stroke="#F6F1E7" stroke-width="7.5" stroke-linecap="round" />
-  <circle cx="60" cy="35" r="9.5" fill="#F6F1E7" />
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="2" y="2" width="96" height="96" rx="22" fill="#F2EBD9" stroke="#D5C5AA" stroke-width="3" />
+  <!-- Terracotta Stem & Target -->
+  <line x1="50" y1="52" x2="50" y2="75" stroke="#B85D3B" stroke-width="2.8" stroke-linecap="round" />
+  <circle cx="50" cy="36.5" r="7.6" fill="#B85D3B" />
+  <path d="M38.5 36.5C38.5 42.2 42.6 46.9 48 47.8" stroke="#C96E48" stroke-width="3.2" stroke-linecap="round" />
+  <path d="M61.5 36.5C61.5 42.2 57.4 46.9 52 47.8" stroke="#C96E48" stroke-width="3.2" stroke-linecap="round" />
+  <path d="M31.8 38.5C31.4 28.8 38.4 20.4 47.8 19.2" stroke="#B85D3B" stroke-width="3.5" stroke-linecap="round" />
+  <path d="M68.2 38.5C68.6 28.8 61.6 20.4 52.2 19.2" stroke="#B85D3B" stroke-width="3.5" stroke-linecap="round" />
+  <!-- Botanical Sage Stem & Leaves -->
+  <path d="M51.5 74.5C54.5 62 63.5 55.5 72.5 45.5C78.5 38.8 81.5 31 80.5 22" stroke="#5A6340" stroke-width="2.8" stroke-linecap="round" />
+  <path d="M80.2 33.5C82.5 21.5 76.5 11.5 63.5 9.5C67.5 15.5 67.8 23.5 74.2 29.5C76.5 31.6 78.8 32.8 80.2 33.5Z" fill="#5A6340" />
+  <path d="M76.5 41.2C84.2 37.5 90.2 30.2 91.5 21.8C85.2 24.2 81.2 29.2 79.8 34.8C79.1 37.5 77.9 39.8 76.5 41.2Z" fill="#68724B" />
+  <path d="M72.5 45.5C77.5 40.5 82.5 34.5 85.5 28" stroke="#5A6340" stroke-width="2.2" stroke-linecap="round" />
+  <!-- Layered Espresso Open Book -->
+  <path d="M48.8 74.5C43.5 61.5 31.5 54 18.5 52.2L22.5 47.5" stroke="#382618" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M51.2 74.5C57.5 64 69.5 59.5 83.2 58.2L80.2 51.8" stroke="#382618" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M48.5 76C40.5 67.5 27.5 63.5 11.5 63.2L16.2 54.5" stroke="#382618" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M51.5 76C59.5 68.5 72.5 65 88.5 65.5L85.2 59.8" stroke="#382618" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M8.5 71.5C22.5 69.8 37.5 72.5 44.5 79.2C46.2 81.2 48 82.2 50 82.2C52 82.2 53.8 81.2 55.5 79.2C62.5 72.5 77.5 69.8 91.5 71.5" stroke="#382618" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round" />
 </svg>

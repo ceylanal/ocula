@@ -6,6 +6,7 @@ import {
   UserProfile,
 } from "@/types";
 import { countWordsInParagraphs } from "@/lib/textUtils";
+import { ADDITIONAL_SPEED_TEST_ARTICLES } from "./speedTestArticles";
 
 export const INITIAL_USER_PROFILE: UserProfile = {
   id: "user-1",
@@ -151,7 +152,7 @@ const speedTest3Paragraphs = [
   "Bu nedenle stratejik okuma, her metni aynı hızda ve aynı yöntemle tüketmek anlamına gelmez. Bir referans kitabını tararken seçici hız (skimming ve RSVP), felsefi veya teknik bir metni incelerken ise analitik ve not alarak okuma (Magic Pacer ve aktif sorgulama) devreye girmelidir. Okuyucu, metnin amacına göre vites değiştirebilen esnek bir bilişsel mimariye sahip olduğunda, bilgi yığınları arasında kaybolmak yerine onları bilgeliğe dönüştürebilir."
 ];
 
-export const SPEED_TEST_ARTICLES: SpeedTestArticle[] = [
+const BASE_SPEED_TEST_ARTICLES: SpeedTestArticle[] = [
   {
     id: "st-neuro-reading",
     title: "Beynin Okuma Mimarisi ve Görsel Algı",
@@ -363,6 +364,11 @@ const book4Content = [
   "Bölüm 2: Bilişsel Dayanıklılık. Tıpkı bir maraton koşucusunun kaslarını kademeli olarak daha yüksek tempoya alıştırması gibi, görsel-bilişsel sistemimiz de 'aşırı hız antrenmanı' (overspeed training) ile gelişir. Normal okuma hızınızın yüzde elli üzerinde yapılan kısa süreli RSVP veya Pacer egzersizleri, normal okuma hızınıza döndüğünüzde metnin size çok daha rahat ve akıcı gelmesini sağlar."
 ];
 
+export const SPEED_TEST_ARTICLES: SpeedTestArticle[] = [
+  ...BASE_SPEED_TEST_ARTICLES,
+  ...ADDITIONAL_SPEED_TEST_ARTICLES,
+];
+
 export const INITIAL_BOOKS: Book[] = [
   {
     id: "book-neuro-focus",
@@ -559,196 +565,5 @@ export const INITIAL_COMMUNITY_BOOKS: Book[] = [
       "Ben kitaplarda yalnızca bilgi aramam; ruhumu dinlendiren, bana kendi eksiklerimi ve insan doğasının inceliklerini gösteren samimi bir dost sesi ararım. Bir kitabı hızla tüketmek değil, her cümlesini zihinde demleyerek okumak gerçek bilgeliğin kapısını açar.",
       "İnsan kendisiyle baş başa kalabileceği, dış dünyanın gürültüsünden çekilebileceği bir 'arka dükkân' kurmalıdır ruhunda. Gerçek özgürlük ve sükûnet, işte o içsel odada kitaplarla yapılan sessiz söyleşilerde saklıdır.",
     ],
-  },
-];
-
-export const INITIAL_COMMUNITY_MARGINALIA = [
-  {
-    id: "marg-1",
-    book_id: "book-neuro-focus",
-    word_index: 22,
-    selected_text:
-      "İç seslendirme (subvocalization), okuma hızımızı konuşma hızımız olan dakikada 150-220 kelime bandına hapseder.",
-    content:
-      "Pacer modunda 340 WPM'e çıktığımda iç sesimin sustuğunu ve cümleyi doğrudan bir tablo gibi algıladığımı ilk bu paragrafta fark ettim.",
-    author_name: "Elif Karahan",
-    author_wpm: 365,
-    type: "note" as const,
-    is_public: true,
-    likes_count: 28,
-    created_at: "2026-10-26T15:20:00.000Z",
-  },
-  {
-    id: "marg-2",
-    book_id: "book-neuro-focus",
-    word_index: 48,
-    selected_text:
-      "Göz kelimenin tam ortasına değil, ortanın hafif solundaki Optimal Recognition Point (ORP) noktasına kilitlendiğinde kelimeyi tek bakışta çözer.",
-    content: "Topluluk tarafından 64 kez altı çizilen temel odak cümlesi.",
-    author_name: "Ahmet Yılmaz",
-    author_wpm: 310,
-    type: "highlight" as const,
-    is_public: true,
-    likes_count: 64,
-    created_at: "2026-10-26T18:10:00.000Z",
-  },
-  {
-    id: "marg-3",
-    book_id: "book-stoa-mind",
-    word_index: 15,
-    selected_text:
-      "İnsanlar mallarını ve paralarını korurken son derece tutumludur; ancak zamanlarını harcarken, tek açgözlülüğün onurlu olduğu bu konuda son derece savurgandırlar.",
-    content:
-      "Seneca'nın Yaşamın Kısalığı Üzerine eserindeki en çarpıcı tespit. Her sabah okumaya başlamadan önce tekrar okuyorum.",
-    author_name: "Zeynep Demir",
-    author_wpm: 295,
-    type: "note" as const,
-    is_public: true,
-    likes_count: 42,
-    created_at: "2026-10-26T20:05:00.000Z",
-  },
-  {
-    id: "marg-4",
-    book_id: "book-community-donusum",
-    word_index: 0,
-    selected_text:
-      "Gregor Samsa bir sabah huzursuz düşlerden uyandığında, kendini yatağında dev bir böceğe dönüşmüş olarak buldu.",
-    content:
-      "Edebiyat tarihinin en sarsıcı ilk cümlesi. Kafka mucizevi ya da korkunç olanı tamamen sıradan bir sabah rutini tonuyla anlatıyor.",
-    author_name: "Ahmet Yılmaz",
-    author_wpm: 310,
-    type: "note" as const,
-    is_public: true,
-    likes_count: 91,
-    created_at: "2026-10-26T21:40:00.000Z",
-  },
-];
-
-export const INITIAL_COMMUNITY_REVIEWS = [
-  {
-    id: "rev-1",
-    user_id: "user-ahmet",
-    user_name: "Ahmet Yılmaz",
-    book_id: "book-community-donusum",
-    book_title: "Dönüşüm (Metamorfoz)",
-    book_author: "Franz Kafka",
-    achieved_wpm: 310,
-    rating: 5,
-    review_text:
-      "Kafka'nın üslubundaki o sakin ama boğucu gerçekçilik sıcak sepya kağıt üzerinde bambaşka bir derinlik kazandı. Kademeli İvme (Auto-Ramp) açıkken 260 WPM ile başlayıp 310 WPM ortalamayla tek oturuşta, dikkatim hiç dağılmadan tamamladım.",
-    likes: 34,
-    liked_by_me: false,
-    comments: [
-      {
-        id: "c-101",
-        author_name: "Elif Karahan",
-        content:
-          "Özellikle ilk bölümdeki oda tasvirlerini Pacer 3 kelime bloğuyla okumak sahneyi zihinde sinema gibi canlandırıyor!",
-        created_at: "2 saat önce",
-      },
-      {
-        id: "c-102",
-        author_name: "Selim Soylu",
-        content:
-          "310 WPM edebi metinler için harika bir denge hızı, tebrikler Ahmet.",
-        created_at: "45 dk önce",
-      },
-    ],
-    created_at: "3 saat önce",
-  },
-  {
-    id: "rev-2",
-    user_id: "user-elif",
-    user_name: "Elif Karahan",
-    book_id: "book-stoa-mind",
-    book_title: "İçsel Kale: Modern Çağda Stoa Disiplini",
-    book_author: "Prof. Ece Arslan",
-    achieved_wpm: 365,
-    rating: 5,
-    review_text:
-      "Stoa felsefesinin odak ve zaman yönetimi ilkelerini anlatan muazzam bir eser. Kenar notları (Marginalia) açıkken diğer okurların altını çizdiği Seneca pasajlarını görmek okuma zevkini ikiye katladı.",
-    likes: 27,
-    liked_by_me: true,
-    comments: [
-      {
-        id: "c-103",
-        author_name: "Mert Demirtaş",
-        content: "Kesinlikle katılıyorum, 2. bölümdeki sabah rutini notların çok ilham vericiydi.",
-        created_at: "1 saat önce",
-      },
-    ],
-    created_at: "Dün",
-  },
-  {
-    id: "rev-3",
-    user_id: "user-selim",
-    user_name: "Selim Soylu",
-    book_id: "book-community-montaigne",
-    book_title: "Denemeler: Kendini Tanıma Sanatı",
-    book_author: "Michel de Montaigne",
-    achieved_wpm: 285,
-    rating: 5,
-    review_text:
-      "Montaigne ile akşam saatlerinde Dark Sepia modunda ve Piper Nöral Sesli Okuma eşliğinde buluşmak tam bir terapi gibiydi. Hem gözle takip edip hem dinleyerek %94 anlama oranına ulaştım.",
-    likes: 19,
-    liked_by_me: false,
-    comments: [],
-    created_at: "2 gün önce",
-  },
-];
-
-export const INITIAL_COMMUNITY_QUOTES = [
-  {
-    id: "quote-1",
-    user_id: "user-ahmet",
-    user_name: "Ahmet Yılmaz",
-    user_wpm: 310,
-    book_id: "book-community-donusum",
-    book_title: "Dönüşüm (Metamorfoz)",
-    book_author: "Franz Kafka",
-    quote_text:
-      "Gregor bakışlarını pencereye çevirdi; kapalı hava, pencerenin çinkosuna vuran yağmur damlaları duyuluyordu ve bu durum onu büsbütün hüzünlendirdi.",
-    word_index: 82,
-    note_comment:
-      "Dış dünyayla kurulan son bağın pencereye vuran yağmur sesi olması ne kadar incelikli bir metafor.",
-    highlight_count: 91,
-    likes: 48,
-    liked_by_me: true,
-    comments: [
-      {
-        id: "qc-1",
-        author_name: "Zeynep Demir",
-        content:
-          "Bu cümleyi ben de okurken altını çizmiştim! Yağmur sesi Gregor'un yalnızlığını büyütüyor.",
-        created_at: "1 saat önce",
-      },
-    ],
-    created_at: "4 saat önce",
-  },
-  {
-    id: "quote-2",
-    user_id: "user-elif",
-    user_name: "Elif Karahan",
-    user_wpm: 365,
-    book_id: "book-community-montaigne",
-    book_title: "Denemeler: Kendini Tanıma Sanatı",
-    book_author: "Michel de Montaigne",
-    quote_text:
-      "İnsan kendisiyle baş başa kalabileceği, dış dünyanın gürültüsünden çekilebileceği bir 'arka dükkân' kurmalıdır ruhunda. Gerçek özgürlük ve sükûnet, işte o içsel odada kitaplarla yapılan sessiz söyleşilerde saklıdır.",
-    word_index: 54,
-    note_comment:
-      "OkurLab'ın sıcak sepya Zen modu tam olarak Montaigne'in bahsettiği o 'ruhun arka dükkânı' hissini veriyor.",
-    highlight_count: 76,
-    likes: 62,
-    liked_by_me: false,
-    comments: [
-      {
-        id: "qc-2",
-        author_name: "Ahmet Yılmaz",
-        content: "Ruhun arka dükkânı kavramı modern çağda her zamankinden daha değerli.",
-        created_at: "3 saat önce",
-      },
-    ],
-    created_at: "Dün",
   },
 ];

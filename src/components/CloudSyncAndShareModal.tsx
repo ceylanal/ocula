@@ -36,6 +36,7 @@ export function CloudSyncAndShareModal({
     books,
     exerciseLogs,
     readingProgress,
+    bookNotes,
     supabaseUrl,
     supabaseAnonKey,
     lastSyncedAt,
@@ -114,6 +115,7 @@ export function CloudSyncAndShareModal({
       books,
       exerciseLogs,
       readingProgress,
+      bookNotes,
     });
     if (res.ok) {
       setLastSyncedAt(new Date().toISOString());

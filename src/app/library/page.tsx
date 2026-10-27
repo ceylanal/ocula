@@ -34,6 +34,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { useOkurLabStore } from "@/store/useOkurLabStore";
+import { ActionResult, useCommunityStore } from "@/store/useCommunityStore";
 import { Book, BookVisibility, FontFamily, ReadingMode } from "@/types";
 import { parseUploadedBookFile } from "@/lib/fileParser";
 import { tokenizeParagraphs } from "@/lib/textUtils";
@@ -84,7 +85,6 @@ function LibraryAndReaderContent() {
   const {
     books,
     communityBooks,
-    communityMarginalia,
     user,
     readingProgress,
     bookNotes,
@@ -100,11 +100,18 @@ function LibraryAndReaderContent() {
     importBookByInviteOrCommunity,
     addBookNote,
     deleteBookNote,
-    toggleMarginaliaLike,
-    addCommunityQuotePost,
     markDailyTaskByType,
     recordReadingSession,
   } = useOkurLabStore();
+  const {
+    status: communityStatus,
+    marginalia,
+    loadMarginalia,
+    pushAnnotation,
+    removeAnnotation,
+    toggleLike: toggleCommunityLike,
+    publishQuote,
+  } = useCommunityStore();
 
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
   const [readingMode, setReadingMode] = useState<ReadingMode>("standard");
@@ -294,9 +301,7 @@ function LibraryAndReaderContent() {
     : undefined;
   const currentWordIndex = currentProgress?.current_word_index ?? 0;
   const currentWpm =
-    currentProgress?.preferred_wpm ??
-    user.current_wpm ??
-    readerPrefs.defaultWpm;
+    currentProgress?.preferred_wpm ?? readerPrefs.defaultWpm;
 
   const activeStandardWordRef = useRef<HTMLSpanElement | null>(null);
   const lastStandardLineOffsetRef = useRef<number>(-1);
@@ -444,6 +449,7 @@ function LibraryAndReaderContent() {
         books: latest.books,
         exerciseLogs: latest.exerciseLogs,
         readingProgress: latest.readingProgress,
+        bookNotes: latest.bookNotes,
       }).catch(() => {});
     }
   };
@@ -456,12 +462,29 @@ function LibraryAndReaderContent() {
   );
 
   // Community Marginalia (both community notes & public highlights for this book)
-  const activeBookMarginalia = useMemo(() => {
-    if (!activeBook) return [];
-    const list = communityMarginalia.filter((n) => n.book_id === activeBook.id);
-    // If custom book has no community notes yet, include user's own notes + sample literary marginalia
-    return list;
-  }, [communityMarginalia, activeBook]);
+  const activeBookMarginalia = useMemo(
+    () => (activeBook ? marginalia[activeBook.id] || [] : []),
+    [marginalia, activeBook]
+  );
+
+  // Kitap açıldığında (ve oturum durumu değiştiğinde) kitabın herkese açık notlarını çek
+  const activeBookIdForNotes = activeBook?.id;
+  useEffect(() => {
+    if (activeBookIdForNotes) loadMarginalia(activeBookIdForNotes);
+  }, [activeBookIdForNotes, loadMarginalia, user.id]);
+
+  // Toplulukla ilgili bir işlemin sonucunu okura anlatır
+  const communityToast = (result: ActionResult, successText: string) => {
+    if (result.ok) {
+      setAnnotationToast(successText);
+    } else if (result.reason === "error") {
+      setAnnotationToast(`Buluta yazılamadı (not bu cihazda saklandı): ${result.message}`);
+    } else {
+      setAnnotationToast(
+        "Not bu cihazda saklandı. Toplulukla paylaşmak için Supabase hesabınla giriş yap."
+      );
+    }
+  };
 
   // Set of highlighted quotes in this book for visual underlining
   const highlightedSnippets = useMemo(() => {
@@ -651,9 +674,16 @@ function LibraryAndReaderContent() {
     }
   };
 
-  const handleQuickHighlight = () => {
+  const closeSelectionMenu = () => {
+    setSelectionMenu(null);
+    if (typeof window !== "undefined") {
+      window.getSelection()?.removeAllRanges();
+    }
+  };
+
+  const handleQuickHighlight = async () => {
     if (!activeBook || !selectionMenu) return;
-    addBookNote({
+    const note = addBookNote({
       book_id: activeBook.id,
       word_index: selectionMenu.wordIndex,
       selected_text: selectionMenu.text,
@@ -661,19 +691,17 @@ function LibraryAndReaderContent() {
       type: "highlight",
       is_public: true,
     });
-    setAnnotationToast(
+    closeSelectionMenu();
+    communityToast(
+      await pushAnnotation(note),
       "Cümlenin altı çizildi ve Topluluk Notları (Marginalia) panosuna kaydedildi."
     );
-    setSelectionMenu(null);
-    if (typeof window !== "undefined") {
-      window.getSelection()?.removeAllRanges();
-    }
   };
 
-  const handleSaveSelectionNote = (e: React.FormEvent) => {
+  const handleSaveSelectionNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeBook || !selectionMenu) return;
-    addBookNote({
+    const note = addBookNote({
       book_id: activeBook.id,
       word_index: selectionMenu.wordIndex,
       selected_text: selectionMenu.text,
@@ -683,22 +711,20 @@ function LibraryAndReaderContent() {
       is_public: true,
     });
     setShowCommunityMarginalia(true);
-    setAnnotationToast(
+    closeSelectionMenu();
+    communityToast(
+      await pushAnnotation(note),
       "Kenar notunuz eklendi ve sağdaki Topluluk Notları (Marginalia) sütununda paylaşıldı."
     );
-    setSelectionMenu(null);
-    if (typeof window !== "undefined") {
-      window.getSelection()?.removeAllRanges();
-    }
   };
 
-  const handleShareQuoteCardToCommunity = () => {
+  const handleShareQuoteCardToCommunity = async () => {
     if (!activeBook || !selectionMenu) return;
     const noteBody =
       selectionMenu.noteDraft.trim() ||
       `${activeBook.title} okumasından (${currentWpm} WPM) altı çizili alıntı.`;
 
-    addBookNote({
+    const note = addBookNote({
       book_id: activeBook.id,
       word_index: selectionMenu.wordIndex,
       selected_text: selectionMenu.text,
@@ -706,27 +732,28 @@ function LibraryAndReaderContent() {
       type: "highlight",
       is_public: true,
     });
-
-    addCommunityQuotePost({
+    const quote = {
       book_id: activeBook.id,
+      book_title: activeBook.title,
+      book_author: activeBook.author,
       quote_text: selectionMenu.text,
       note_comment: noteBody,
       word_index: selectionMenu.wordIndex,
-    });
+    };
+    closeSelectionMenu();
 
-    setAnnotationToast(
+    const noteResult = await pushAnnotation(note);
+    const quoteResult = noteResult.ok ? await publishQuote(quote) : noteResult;
+    communityToast(
+      quoteResult,
       "Alıntı Kartı 'Okur Salonu' (/community) sosyal akışında paylaşıldı!"
     );
-    setSelectionMenu(null);
-    if (typeof window !== "undefined") {
-      window.getSelection()?.removeAllRanges();
-    }
   };
 
-  const handleAddNote = (e: React.FormEvent) => {
+  const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeBook || !newNoteText.trim()) return;
-    addBookNote({
+    const note = addBookNote({
       book_id: activeBook.id,
       word_index: currentWordIndex,
       selected_text:
@@ -741,7 +768,25 @@ function LibraryAndReaderContent() {
     });
     setNewNoteText("");
     setSelectedQuote("");
-    setAnnotationToast("Kenar notunuz kaydedildi.");
+    communityToast(await pushAnnotation(note), "Kenar notunuz kaydedildi.");
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    const note = bookNotes.find((n) => n.id === noteId);
+    deleteBookNote(noteId);
+    if (note) removeAnnotation(note);
+  };
+
+  const handleToggleMarginaliaLike = async (noteId: string) => {
+    if (!activeBook) return;
+    const result = await toggleCommunityLike("annotation", noteId, activeBook.id);
+    if (!result.ok) {
+      setAnnotationToast(
+        result.reason === "error"
+          ? `Beğeni kaydedilemedi: ${result.message}`
+          : "Beğenmek için Supabase hesabınla giriş yapmalısın."
+      );
+    }
   };
 
   // ============================================================================
@@ -1492,13 +1537,29 @@ function LibraryAndReaderContent() {
                   <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
                     {activeBookMarginalia.length === 0 ? (
                       <div className="p-4 rounded-2xl bg-background/70 border border-border text-xs text-muted text-center space-y-1">
-                        <p className="font-serif italic text-foreground">
-                          Bu kitapta ilk kenar notunu siz bırakın!
-                        </p>
-                        <p>
-                          Okurken herhangi bir cümleyi seçerek altını çizebilir
-                          veya yorum ekleyebilirsiniz.
-                        </p>
+                        {communityStatus === "ready" ? (
+                          <>
+                            <p className="font-serif italic text-foreground">
+                              Bu kitapta ilk kenar notunu siz bırakın!
+                            </p>
+                            <p>
+                              Okurken herhangi bir cümleyi seçerek altını çizebilir
+                              veya yorum ekleyebilirsiniz.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-serif italic text-foreground">
+                              Topluluk notları için giriş gerekli.
+                            </p>
+                            <p>
+                              {communityStatus === "unconfigured"
+                                ? "Profil menüsünden Supabase bağlantısını tanımla."
+                                : "Supabase hesabınla giriş yaparsan diğer okurların notlarını görür ve kendi notlarını paylaşırsın."}{" "}
+                              Notların bu cihazda saklanmaya devam eder.
+                            </p>
+                          </>
+                        )}
                       </div>
                     ) : (
                       activeBookMarginalia.map((item) => (
@@ -1565,11 +1626,18 @@ function LibraryAndReaderContent() {
 
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => toggleMarginaliaLike(item.id)}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-surface border border-border hover:border-[#B85D3B] text-foreground transition-colors"
+                                onClick={() => handleToggleMarginaliaLike(item.id)}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-colors ${
+                                  item.liked_by_me
+                                    ? "bg-[#B85D3B]/15 border-[#B85D3B] text-foreground"
+                                    : "bg-surface border-border hover:border-[#B85D3B] text-foreground"
+                                }`}
                               >
-                                <Heart className="w-3 h-3 text-[#B85D3B]" />
-                                <span>{item.likes_count ?? 1}</span>
+                                <Heart
+                                  className="w-3 h-3 text-[#B85D3B]"
+                                  fill={item.liked_by_me ? "#B85D3B" : "none"}
+                                />
+                                <span>{item.likes_count ?? 0}</span>
                               </button>
                             </div>
                           </div>
@@ -1620,7 +1688,7 @@ function LibraryAndReaderContent() {
                               Kelime #{note.word_index + 1} konumuna git &rarr;
                             </button>
                             <button
-                              onClick={() => deleteBookNote(note.id)}
+                              onClick={() => handleDeleteNote(note.id)}
                               className="text-muted hover:text-[#B85D3B]"
                               title="Notu Sil"
                             >

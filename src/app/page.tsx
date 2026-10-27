@@ -92,7 +92,7 @@ export default function ReadingStudioPage() {
     )
   );
   const bookWpm =
-    activeProg?.preferred_wpm ?? user.current_wpm ?? readerPrefs.defaultWpm;
+    activeProg?.preferred_wpm ?? readerPrefs.defaultWpm;
   const savedMode = activeProg?.reading_mode ?? "pacer";
   const remainingWords = Math.max(0, totalBookWords - currentWordIdx);
   const estimatedRemainingMinutes = Math.max(
