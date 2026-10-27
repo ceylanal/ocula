@@ -184,7 +184,7 @@ export default function ReadingStudioPage() {
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#B85D3B]/15 border border-[#B85D3B]/30 text-[#B85D3B] text-xs font-semibold mb-1.5">
             <Sparkles className="w-3.5 h-3.5 text-[#B85D3B]" />
-            <span>OkurLab • Sıcak Sepya Kitap Stüdyosu &amp; Kademeli Hızlanma (Progressive WPM)</span>
+            <span>Bugünün okuması</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-serif font-bold tracking-tight">
             Okuma Stüdyosu
