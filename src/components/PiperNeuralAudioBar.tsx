@@ -941,13 +941,15 @@ export function PiperNeuralAudioBar({
       )}
     </div>
 
-    {/* Mobil sabit kontrol çubuğu: sayfa otomatik kaydığında ana çubuk görünümden çıkar;
-        durdurma ve hız ayarı her zaman parmak altında kalsın. */}
+    {/* Sabit kontrol çubuğu (mobil ve masaüstü): sayfa otomatik kaydığında ana çubuk
+        görünümden çıkar; durdurma ve hız ayarı her zaman erişilebilir kalsın. Masaüstünde
+        kenar çubuğunun sağındaki içerik alanında ortalanır. */}
     {hasStarted && (
+      <div className="fixed inset-x-3 z-40 bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] md:bottom-6 md:left-[276px] md:right-0 lg:left-[292px] md:px-3 flex justify-center pointer-events-none">
       <div
         role="toolbar"
         aria-label="Sesli okuma kontrolleri"
-        className="md:hidden fixed inset-x-3 z-40 bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] p-2 rounded-2xl bg-surface/95 backdrop-blur-xl border border-border shadow-lg flex items-center gap-1.5"
+        className="pointer-events-auto w-full md:max-w-xl p-2 rounded-2xl bg-surface/95 backdrop-blur-xl border border-border shadow-lg flex items-center gap-1.5"
       >
         <button
           type="button"
@@ -1009,6 +1011,7 @@ export function PiperNeuralAudioBar({
             <Plus className="w-4 h-4" />
           </button>
         </div>
+      </div>
       </div>
     )}
     </>
