@@ -23,6 +23,8 @@ interface MagicPacerEngineProps {
   fontSize?: number;
   lineHeight?: number;
   autoRampEnabled?: boolean;
+  zenDimmed?: boolean;
+  onPlayingStateChange?: (isPlaying: boolean) => void;
   onToggleAutoRamp?: () => void;
   onWordIndexChange?: (index: number, wpm: number) => void;
   onSessionSave?: (stats: {
@@ -44,10 +46,12 @@ export function MagicPacerEngine({
   paragraphs,
   initialWordIndex = 0,
   initialWpm = 320,
-  fontClass = "font-sans",
+  fontClass = "font-serif",
   fontSize = 19,
   lineHeight = 1.9,
   autoRampEnabled = false,
+  zenDimmed = false,
+  onPlayingStateChange,
   onToggleAutoRamp,
   onWordIndexChange,
   onSessionSave,
@@ -89,6 +93,7 @@ export function MagicPacerEngine({
 
   useEffect(() => {
     latestStateRef.current = { currentIndex, wpm, isPlaying };
+    onPlayingStateChange?.(isPlaying);
   }, [currentIndex, wpm, isPlaying]);
 
   const flushSessionSave = (reason: "pause" | "unmount") => {
@@ -274,22 +279,26 @@ export function MagicPacerEngine({
 
   return (
     <div className="space-y-4">
-      {/* Control Bar */}
-      <div className="p-4 rounded-2xl bg-surface border border-border flex flex-wrap items-center justify-between gap-4">
+      {/* Control Bar (fades softly in Zen Reading Mode) */}
+      <div
+        className={`p-4 rounded-2xl bg-surface border border-border flex flex-wrap items-center justify-between gap-4 transition-opacity duration-500 ${
+          zenDimmed ? "opacity-15 hover:opacity-100" : "opacity-100"
+        }`}
+      >
         {/* WPM Control */}
         <div className="flex items-center gap-3 flex-1 min-w-[240px]">
-          <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[#B85D3B]/10 border border-[#B85D3B]/25 flex items-center justify-center text-[#B85D3B] shrink-0">
             <Gauge className="w-4 h-4" />
           </div>
           <div className="flex-1">
             <div className="flex items-center justify-between text-xs mb-1">
               <span className="text-muted font-medium">Pacer Hızı</span>
-              <span className="font-bold text-indigo-400">{wpm} WPM</span>
+              <span className="font-bold text-[#B85D3B]">{wpm} WPM</span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setWpm((w) => Math.max(100, w - 25))}
-                className="px-2 py-0.5 text-xs rounded bg-surface-elevated border border-border hover:border-indigo-500/40"
+                className="px-2 py-0.5 text-xs rounded bg-surface-elevated border border-border hover:border-[#B85D3B]/40"
               >
                 -25
               </button>
@@ -300,11 +309,11 @@ export function MagicPacerEngine({
                 step={10}
                 value={wpm}
                 onChange={(e) => setWpm(Number(e.target.value))}
-                className="w-full accent-indigo-500 cursor-pointer h-1.5 rounded-lg"
+                className="w-full accent-[#B85D3B] cursor-pointer h-1.5 rounded-lg"
               />
               <button
                 onClick={() => setWpm((w) => Math.min(1000, w + 25))}
-                className="px-2 py-0.5 text-xs rounded bg-surface-elevated border border-border hover:border-indigo-500/40"
+                className="px-2 py-0.5 text-xs rounded bg-surface-elevated border border-border hover:border-[#B85D3B]/40"
               >
                 +25
               </button>
@@ -322,7 +331,7 @@ export function MagicPacerEngine({
                 onClick={() => setSpanSize(sz)}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                   spanSize === sz
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-[#B85D3B] text-[#F6F1E7]"
                     : "text-muted hover:text-foreground"
                 }`}
               >
@@ -348,7 +357,7 @@ export function MagicPacerEngine({
                 onClick={() => setMaskMode(m.id)}
                 className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                   maskMode === m.id
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-[#B85D3B] text-[#F6F1E7]"
                     : "text-muted hover:text-foreground"
                 }`}
               >
@@ -387,7 +396,7 @@ export function MagicPacerEngine({
               setCompleted(false);
               setIsPlaying((p) => !p);
             }}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
+            className="px-5 py-2.5 rounded-xl bg-[#B85D3B] hover:bg-[#96482B] text-[#F6F1E7] text-sm font-semibold flex items-center gap-2 shadow-md shadow-[#B85D3B]/20 transition-all"
           >
             {isPlaying ? (
               <>
@@ -416,30 +425,34 @@ export function MagicPacerEngine({
       </div>
 
       {/* Full-Page Pacer Document Viewport */}
-      <div className="rounded-3xl bg-surface border-2 border-border overflow-hidden shadow-xl">
+      <div className="rounded-3xl bg-background border-2 border-border overflow-hidden shadow-lg">
         {/* Progress bar */}
         <div className="h-1.5 w-full bg-surface-elevated">
           <div
-            className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-150"
+            className="h-full bg-gradient-to-r from-[#B85D3B] to-[#5C6B57] transition-all duration-150"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
 
-        <div className="px-6 py-3 bg-surface-elevated/50 border-b border-border flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+        <div
+          className={`px-6 py-3 bg-surface/60 border-b border-border flex flex-wrap items-center justify-between gap-2 text-xs text-muted transition-opacity duration-500 ${
+            zenDimmed ? "opacity-25 hover:opacity-100" : "opacity-100"
+          }`}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <Sparkles className="w-3.5 h-3.5 text-[#B85D3B]" />
               Herhangi bir kelimeye tıklayarak odak çerçevesini o noktaya
               taşıyabilirsiniz (Boşluk tuşu: Başlat/Duraklat).
             </span>
             {autoRampEnabled && (
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold flex items-center gap-1">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#5C6B57]/15 border border-[#5C6B57]/30 text-[#5C6B57] font-semibold flex items-center gap-1">
                 <TrendingUp className="w-3 h-3" />
                 <span>Auto-Ramp (+10 WPM / 400 kelime)</span>
               </span>
             )}
             {rampNotification && (
-              <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold animate-pulse">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#B85D3B]/15 border border-[#B85D3B]/35 text-[#B85D3B] font-bold animate-pulse">
                 ⚡ Hız İvmesi: {rampNotification.from} &rarr;{" "}
                 {rampNotification.to} WPM
               </span>
@@ -447,7 +460,7 @@ export function MagicPacerEngine({
           </div>
           <div className="flex items-center gap-2">
             {lastSavedToast && (
-              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-semibold">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#B85D3B]/15 border border-[#B85D3B]/35 text-[#B85D3B] font-semibold">
                 {lastSavedToast}
               </span>
             )}
@@ -461,7 +474,7 @@ export function MagicPacerEngine({
 
         <div
           ref={containerRef}
-          className={`max-h-[480px] overflow-y-auto p-6 sm:p-10 space-y-6 ${fontClass}`}
+          className={`max-h-[520px] overflow-y-auto p-6 sm:p-10 space-y-6 ${fontClass}`}
           style={{
             fontSize: `${fontSize}px`,
             lineHeight: lineHeight,
@@ -472,7 +485,7 @@ export function MagicPacerEngine({
 
             // Paragraph-level masking (prevents per-word GPU blur glitches)
             let paragraphStyleClass =
-              "transition-opacity duration-200 rounded-2xl p-3 -mx-3";
+              "transition-opacity duration-200 rounded-2xl p-3.5 -mx-3.5";
             if (!isParaActive) {
               if (maskMode === "strict") {
                 paragraphStyleClass +=
@@ -484,7 +497,7 @@ export function MagicPacerEngine({
               }
             } else {
               paragraphStyleClass +=
-                " opacity-100 bg-surface-elevated/35 border border-border/50";
+                " opacity-100 bg-surface/55 border border-border/70";
             }
 
             return (
@@ -496,11 +509,11 @@ export function MagicPacerEngine({
                   const isFirstFocused = token.globalIndex === currentIndex;
                   const isPast = token.globalIndex < currentIndex;
 
-                  // Keep exact same font-weight and inline metrics so text NEVER reflows or shifts!
+                  // Pacer (Odak Bloğu) Kelime Vurgusu:
+                  // #E6D2B5 arka plan üzerinde #2C2520 metin ve altında ince #B85D3B çizgi (.okurlab-pacer-focus)
                   let wordAppearance = "";
                   if (isFocused) {
-                    wordAppearance =
-                      "bg-indigo-500/25 text-foreground shadow-[0_2px_0_0_#6366f1] ring-1 ring-indigo-500/40";
+                    wordAppearance = "okurlab-pacer-focus";
                   } else if (isParaActive) {
                     if (maskMode === "strict") {
                       wordAppearance = isPast

@@ -116,13 +116,13 @@ export function CloudSyncAndShareModal({
       ? window.location.origin
       : "https://ocula.vercel.app";
 
-  const shareText = `👁️ Ocula ile göz kaslarımı ve görsel algımı eğiterek okuma hızımı ${user.current_wpm} WPM (%${user.comprehension_rate} anlama oranı) seviyesine çıkardım! Sen de dene:`;
+  const shareText = `📖 OkurLab ile sıcak sepya kağıt üzerinde okuma hızımı ${user.current_wpm} WPM (%${user.comprehension_rate} anlama oranı) seviyesine çıkardım! Sen de dene:`;
 
   const handleNativeShare = async () => {
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({
-          title: "Ocula — Görsel Algı ve Hızlı Okuma Sistemi",
+          title: "OkurLab — Sıcak Sepya Kitap Stüdyosu & Okuma Laboratuvarı",
           text: shareText,
           url: shareUrl,
         });
@@ -245,7 +245,7 @@ export function CloudSyncAndShareModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-semibold text-indigo-400">
-                      Paylaşılabilir Ocula Optik Kartı
+                      Paylaşılabilir OkurLab Okuma Kartı
                     </div>
                     <div className="text-xl font-extrabold mt-0.5">
                       {user.current_wpm} WPM • %{user.comprehension_rate} Anlama

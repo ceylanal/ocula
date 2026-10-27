@@ -1,19 +1,14 @@
-<svg width="512" height="512" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="ocula-bg" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#0F172A" />
-      <stop offset="50%" stop-color="#1E1B4B" />
-      <stop offset="100%" stop-color="#311042" />
-    </linearGradient>
-    <linearGradient id="ocula-stroke" x1="4" y1="18" x2="32" y2="18" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#818CF8" />
-      <stop offset="50%" stop-color="#FFFFFF" />
-      <stop offset="100%" stop-color="#C084FC" />
-    </linearGradient>
-  </defs>
-  <rect width="36" height="36" rx="9" fill="url(#ocula-bg)" />
-  <path d="M4.5 18C7.6 11.4 12.6 8.2 18 8.2C23.4 8.2 28.4 11.4 31.5 18C28.4 24.6 23.4 27.8 18 27.8C12.6 27.8 7.6 24.6 4.5 18Z" stroke="url(#ocula-stroke)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-  <circle cx="18" cy="18" r="6" stroke="#A5B4FC" stroke-width="1.6" />
-  <circle cx="18" cy="18" r="2.8" fill="#F43F5E" />
-  <circle cx="20.2" cy="15.8" r="1.1" fill="#FFFFFF" />
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="120" height="120" rx="28" fill="#EFE8DA" stroke="#DFD5C3" stroke-width="4" />
+  <path
+    d="M60 35C50.5 29.5 37.3 28 25 30.8C22 31.4 20 34 20 37V82C20 85.4 23 88 26.3 87.3C38 85 50.3 86.7 60 92C69.7 86.7 82 85 93.7 87.3C97 88 100 85.4 100 82V37C100 34 98 31.4 95 30.8C82.7 28 69.5 29.5 60 35Z"
+    fill="#F6F1E7"
+    stroke="#4A5D4E"
+    stroke-width="5.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <path d="M60 36V90" stroke="#DFD5C3" stroke-width="4.5" stroke-linecap="round" />
+  <circle cx="60" cy="60.5" r="20.5" fill="#E6D2B5" fill-opacity="0.7" stroke="#B85D3B" stroke-width="5.5" />
+  <circle cx="60" cy="60.5" r="7" fill="#B85D3B" />
 </svg>

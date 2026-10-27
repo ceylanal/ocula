@@ -143,7 +143,7 @@ export const useSupereadStore = create<SupereadState>()(
         },
       ],
       readerPrefs: {
-        fontFamily: "sans",
+        fontFamily: "serif",
         fontSize: 19,
         lineHeight: 1.85,
         defaultWpm: 320,

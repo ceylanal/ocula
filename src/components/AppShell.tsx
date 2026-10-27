@@ -57,20 +57,20 @@ const THEME_OPTIONS: {
 }[] = [
   {
     id: "sepia",
-    label: "Sepya (Ana Tema)",
-    desc: "Varsayılan göz yormayan kitap kağıdı",
+    label: "Sıcak Sepya & Parşömen (Ana Tema)",
+    desc: "#F6F1E7 parşömen kağıt ve #2C2520 espresso mürekkep",
     icon: BookMarked,
   },
   {
     id: "dark",
-    label: "Gece Modu",
-    desc: "Düşük ışık için karanlık optik tema",
+    label: "Gece Modu (Dark Sepia)",
+    desc: "#1C1917 koyu kahve arka plan ve #D6CBB9 sıcak krem metin",
     icon: Moon,
   },
   {
     id: "light",
-    label: "Gün Modu",
-    desc: "Yüksek kontrast beyaz tema",
+    label: "Açık Fildişi (Gün Modu)",
+    desc: "Yumuşak antik beyaz kağıt dokusu",
     icon: Sun,
   },
 ];
@@ -103,48 +103,48 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground">
       {/* Desktop Left Sidebar */}
-      <aside className="hidden md:flex md:w-[276px] lg:w-[292px] md:flex-col md:fixed md:inset-y-0 border-r border-border bg-surface/90 backdrop-blur-xl z-30 select-none">
-        {/* Brand Header with Minimal Ocula Optical Logo */}
+      <aside className="zen-chrome hidden md:flex md:w-[276px] lg:w-[292px] md:flex-col md:fixed md:inset-y-0 border-r border-border bg-surface/95 backdrop-blur-xl z-30 select-none transition-opacity duration-500">
+        {/* Brand Header with Minimalist OkurLab Logo */}
         <div className="px-6 py-5 flex items-center justify-between border-b border-border/80">
           <Link href="/">
             <OculaLogo
               size="md"
-              subtitle="Nöro-Görsel Algı & Okuma Sistemi"
+              subtitle="Sıcak Sepya Kitap & Okuma Laboratuvarı"
             />
           </Link>
         </div>
 
         {/* Live Telemetry Card */}
         <div className="px-4 pt-4">
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-surface-elevated to-surface-elevated border border-indigo-500/20 space-y-3">
+          <div className="p-4 rounded-2xl bg-surface-elevated/70 border border-border space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-1">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#B85D3B] flex items-center gap-1">
                 <Sparkles className="w-3 h-3" />
-                Ocula Telemetri
+                OkurLab Günlüğü
               </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 text-[11px] font-bold">
-                <Flame className="w-3 h-3 fill-amber-400" />
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#B85D3B]/15 text-[#B85D3B] text-[11px] font-bold">
+                <Flame className="w-3 h-3 fill-[#B85D3B]" />
                 {streak} Gün
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-2 pt-0.5">
-              <div className="p-2.5 rounded-xl bg-surface/80 border border-border/80">
+              <div className="p-2.5 rounded-xl bg-background/80 border border-border/80">
                 <div className="text-[10px] uppercase tracking-wider text-muted font-medium">
-                  Algı Hızı
+                  Okuma Hızı
                 </div>
-                <div className="text-xl font-extrabold tabular-nums tracking-tight flex items-baseline gap-1 mt-0.5">
+                <div className="text-xl font-serif font-bold tabular-nums tracking-tight flex items-baseline gap-1 mt-0.5">
                   {currentWpm}
-                  <span className="text-[10px] font-semibold text-indigo-400">
+                  <span className="text-[10px] font-sans font-semibold text-[#B85D3B]">
                     WPM
                   </span>
                 </div>
               </div>
-              <div className="p-2.5 rounded-xl bg-surface/80 border border-border/80">
+              <div className="p-2.5 rounded-xl bg-background/80 border border-border/80">
                 <div className="text-[10px] uppercase tracking-wider text-muted font-medium">
                   Anlama
                 </div>
-                <div className="text-xl font-extrabold tabular-nums tracking-tight text-emerald-400 mt-0.5">
+                <div className="text-xl font-serif font-bold tabular-nums tracking-tight text-[#5C6B57] mt-0.5">
                   %{comprehension}
                 </div>
               </div>
@@ -152,14 +152,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px] text-muted">
-                <span>Elit Görsel Atlet Hedefi (600 WPM)</span>
+                <span>Akıcı Okur Hedefi (600 WPM)</span>
                 <span className="font-semibold text-foreground">
                   %{targetPct}
                 </span>
               </div>
-              <div className="h-1.5 w-full rounded-full bg-surface overflow-hidden">
+              <div className="h-1.5 w-full rounded-full bg-background overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-rose-500 transition-all duration-500"
+                  className="h-full bg-gradient-to-r from-[#B85D3B] to-[#5C6B57] transition-all duration-500"
                   style={{ width: `${targetPct}%` }}
                 />
               </div>
@@ -169,8 +169,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Navigation Links */}
         <nav className="flex-1 px-3.5 py-5 space-y-1.5 overflow-y-auto">
-          <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted/70">
-            Modüller
+          <div className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-muted">
+            Okuma Alanları
           </div>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -185,15 +185,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 className={`relative flex items-center gap-3.5 px-3.5 py-3 rounded-2xl transition-all duration-200 group ${
                   isActive
-                    ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-600/25 font-semibold"
-                    : "text-foreground/80 hover:bg-surface-elevated hover:text-foreground"
+                    ? "bg-[#B85D3B] text-[#F6F1E7] shadow-md shadow-[#B85D3B]/20 font-semibold"
+                    : "text-foreground/85 hover:bg-surface-elevated hover:text-foreground"
                 }`}
               >
                 <div
                   className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
                     isActive
-                      ? "bg-white/15 text-white"
-                      : "bg-surface-elevated border border-border text-muted group-hover:text-indigo-400 group-hover:border-indigo-500/30"
+                      ? "bg-white/15 text-[#F6F1E7]"
+                      : "bg-background/80 border border-border text-muted group-hover:text-[#B85D3B] group-hover:border-[#B85D3B]/40"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -204,7 +204,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </div>
                   <div
                     className={`text-[11px] truncate mt-0.5 ${
-                      isActive ? "text-indigo-100/90" : "text-muted"
+                      isActive ? "text-[#F6F1E7]/85" : "text-muted"
                     }`}
                   >
                     {item.sublabel}
@@ -219,7 +219,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="p-4 border-t border-border/80 space-y-2.5">
           <button
             onClick={() => setCloudModalOpen(true)}
-            className="w-full py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-indigo-500/15 via-violet-500/15 to-rose-500/15 hover:from-indigo-600 hover:to-violet-600 text-indigo-400 hover:text-white border border-indigo-500/30 text-xs font-semibold flex items-center justify-between transition-all shadow-sm"
+            className="w-full py-2.5 px-3.5 rounded-xl bg-[#5C6B57]/15 hover:bg-[#5C6B57] text-[#5C6B57] hover:text-[#F6F1E7] border border-[#5C6B57]/30 text-xs font-semibold flex items-center justify-between transition-all shadow-sm"
           >
             <span className="flex items-center gap-2">
               <Cloud className="w-4 h-4" />
@@ -230,25 +230,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <button
             onClick={() => setSettingsOpen(true)}
-            className="w-full py-2.5 px-3.5 rounded-xl bg-surface-elevated hover:bg-surface border border-border text-xs font-semibold flex items-center justify-between transition-all"
+            className="w-full py-2.5 px-3.5 rounded-xl bg-surface-elevated hover:bg-background border border-border text-xs font-semibold flex items-center justify-between transition-all"
           >
             <span className="flex items-center gap-2 text-foreground">
-              <Settings className="w-4 h-4 text-indigo-400" />
+              <Settings className="w-4 h-4 text-[#B85D3B]" />
               <span>Ayarlar &amp; Görünüm</span>
             </span>
-            <span className="px-2 py-0.5 rounded-md bg-surface border border-border text-[10px] font-bold text-muted">
+            <span className="px-2 py-0.5 rounded-md bg-background border border-border text-[10px] font-bold text-muted">
               {activeTheme === "sepia"
                 ? "Sepya (Ana)"
                 : activeTheme === "dark"
-                ? "Gece"
-                : "Gün"}
+                ? "Dark Sepia"
+                : "Fildişi"}
             </span>
           </button>
         </div>
       </aside>
 
       {/* Mobile Top Bar */}
-      <header className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-surface/90 backdrop-blur-xl border-b border-border">
+      <header className="zen-chrome md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-surface/95 backdrop-blur-xl border-b border-border transition-opacity duration-500">
         <Link href="/">
           <OculaLogo size="sm" />
         </Link>
@@ -256,12 +256,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-1.5">
           <div className="px-2.5 py-1 rounded-xl bg-surface-elevated border border-border text-[11px] font-bold tabular-nums flex items-center gap-1.5">
             <span>{currentWpm} WPM</span>
-            <span className="text-emerald-400">%{comprehension}</span>
+            <span className="text-[#5C6B57]">%{comprehension}</span>
           </div>
 
           <button
             onClick={() => setCloudModalOpen(true)}
-            className="p-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400"
+            className="p-2 rounded-xl bg-[#B85D3B]/15 border border-[#B85D3B]/30 text-[#B85D3B]"
             title="Paylaş & Bulut Eşitleme"
           >
             <Share2 className="w-3.5 h-3.5" />
@@ -285,7 +285,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/90 backdrop-blur-xl border-t border-border grid grid-cols-4 py-1.5 px-2">
+      <nav className="zen-chrome md:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur-xl border-t border-border grid grid-cols-4 py-1.5 px-2 transition-opacity duration-500">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive =

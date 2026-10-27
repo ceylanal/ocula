@@ -2,15 +2,15 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Ocula — Görsel Algı, Hızlı Okuma ve Akıllı Kütüphane",
-    short_name: "Ocula",
+    name: "OkurLab — Sıcak Sepya Kitap Stüdyosu & Okuma Laboratuvarı",
+    short_name: "OkurLab",
     description:
-      "Göz kaslarını, periferal görüşü ve okuma hızını geliştiren nöro-görsel egzersiz sistemi ve akıllı e-kitap okuyucu.",
+      "Uzun süreli kitap okumaya uygun sıcak sepya kağıt dokusu, PDF/EPUB okuyucu, çevrimdışı nöral sesli okuma ve odak pacer laboratuvarı.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#070a12",
-    theme_color: "#4f46e5",
+    background_color: "#F6F1E7",
+    theme_color: "#B85D3B",
     icons: [
       {
         src: "/ocula-logo.svg",

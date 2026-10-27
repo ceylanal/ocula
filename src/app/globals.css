@@ -2,56 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Primary Default Theme: Sepia (Warm Optical Book Paper) */
+/* Primary Default Theme: Sıcak Sepya & Antik Kağıt (Warm Parchment & Botanical Ink) */
 :root,
 [data-theme="sepia"] {
-  --bg-primary: #f4ecda;
-  --bg-surface: #fdf9f0;
-  --bg-elevated: #ece1c9;
-  --text-primary: #2c2016;
-  --text-muted: #6e5844;
-  --border-color: #d8c5a5;
-  --accent-color: #4f46e5;
+  --bg-primary: #F6F1E7;
+  --bg-surface: #EFE8DA;
+  --bg-elevated: #E6DEC8;
+  --text-primary: #2C2520;
+  --text-muted: #8A7E72;
+  --border-color: #DFD5C3;
+  --accent-color: #B85D3B;
+  --sage-color: #5C6B57;
+  --pacer-bg: #E6D2B5;
+  --pacer-text: #2C2520;
+  --pacer-line: #B85D3B;
 }
 
+/* Gece Modu (Dark Sepia - Koyu Kahve/Kömür & Sıcak Krem) */
 [data-theme="dark"] {
-  --bg-primary: #070a12;
-  --bg-surface: #0e1422;
-  --bg-elevated: #161f33;
-  --text-primary: #f8fafc;
-  --text-muted: #94a3b8;
-  --border-color: #1f2b45;
-  --accent-color: #6366f1;
+  --bg-primary: #1C1917;
+  --bg-surface: #26221F;
+  --bg-elevated: #312B27;
+  --text-primary: #D6CBB9;
+  --text-muted: #9A8D7F;
+  --border-color: #3B342E;
+  --accent-color: #B85D3B;
+  --sage-color: #6B7C65;
+  --pacer-bg: #3E3227;
+  --pacer-text: #F6F1E7;
+  --pacer-line: #B85D3B;
 }
 
+/* Açık Fildişi (Gün Modu - Yumuşak Antik Beyaz) */
 [data-theme="light"] {
-  --bg-primary: #f4f6fb;
-  --bg-surface: #ffffff;
-  --bg-elevated: #edf1f9;
-  --text-primary: #0f172a;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --accent-color: #4f46e5;
+  --bg-primary: #FAF7F0;
+  --bg-surface: #F3EDE1;
+  --bg-elevated: #E8DFCE;
+  --text-primary: #2C2520;
+  --text-muted: #8A7E72;
+  --border-color: #DFD5C3;
+  --accent-color: #B85D3B;
+  --sage-color: #5C6B57;
+  --pacer-bg: #E6D2B5;
+  --pacer-text: #2C2520;
+  --pacer-line: #B85D3B;
 }
 
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  transition: background-color 0.25s ease, color 0.25s ease;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  font-family: var(--font-jakarta), system-ui, -apple-system, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Main headings and literary content use Literata Serif for an authentic book / Kindle feel */
+h1,
+h2,
+h3,
+.font-serif {
+  font-family: var(--font-literata), Georgia, Cambria, serif;
+}
+
+/* Buttons and interactive controls use Plus Jakarta Sans */
+button,
+input,
+select {
+  font-family: var(--font-jakarta), system-ui, -apple-system, sans-serif;
 }
 
 [data-theme="sepia"] body {
   background-image: radial-gradient(
       circle at 15% 0%,
-      rgba(180, 83, 9, 0.06),
-      transparent 42%
+      rgba(184, 93, 59, 0.045),
+      transparent 45%
     ),
     radial-gradient(
       circle at 85% 15%,
-      rgba(79, 70, 229, 0.05),
-      transparent 40%
+      rgba(92, 107, 87, 0.04),
+      transparent 42%
     );
   background-attachment: fixed;
 }
@@ -59,50 +88,65 @@ body {
 [data-theme="dark"] body {
   background-image: radial-gradient(
       circle at 15% 0%,
-      rgba(99, 102, 241, 0.11),
-      transparent 40%
+      rgba(184, 93, 59, 0.07),
+      transparent 42%
     ),
     radial-gradient(
       circle at 85% 15%,
-      rgba(168, 85, 247, 0.08),
-      transparent 38%
+      rgba(92, 107, 87, 0.05),
+      transparent 40%
     );
   background-attachment: fixed;
 }
 
-/* Ensure high-contrast ink colors for accent badges on Sepia & Light paper */
+/* Pacer (Odak Bloğu) Word Highlight: #E6D2B5 background, #2C2520 text, thin #B85D3B underline */
+.okurlab-pacer-focus {
+  background-color: var(--pacer-bg);
+  color: var(--pacer-text);
+  box-shadow: 0 2px 0 0 var(--pacer-line);
+}
+
+/* High-contrast Warm Terracotta & Botanical Sage ink overrides on Sepia & Light paper */
 [data-theme="sepia"] .text-indigo-400,
 [data-theme="sepia"] .text-indigo-300,
 [data-theme="light"] .text-indigo-400,
 [data-theme="light"] .text-indigo-300 {
-  color: #4338ca;
+  color: #B85D3B;
 }
 
 [data-theme="sepia"] .text-emerald-400,
 [data-theme="light"] .text-emerald-400 {
-  color: #047857;
+  color: #5C6B57;
 }
 
 [data-theme="sepia"] .text-amber-400,
 [data-theme="sepia"] .text-amber-300,
 [data-theme="light"] .text-amber-400,
 [data-theme="light"] .text-amber-300 {
-  color: #b45309;
+  color: #9E582A;
 }
 
 [data-theme="sepia"] .text-rose-400,
 [data-theme="light"] .text-rose-400 {
-  color: #be123c;
+  color: #B85D3B;
 }
 
 [data-theme="sepia"] .text-violet-400,
 [data-theme="light"] .text-violet-400 {
-  color: #6d28d9;
+  color: #B85D3B;
 }
 
-/* Subtle top specular highlight on surface cards in dark mode */
-[data-theme="dark"] .bg-surface {
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+/* Zen Reading Mode: smoothly fade sidebars & control panels when Pacer or Audio is actively reading without pointer movement */
+.zen-chrome {
+  transition: opacity 500ms ease;
+}
+
+html[data-zen-active="true"] .zen-chrome {
+  opacity: 0.14;
+}
+
+html[data-zen-active="true"] .zen-chrome:hover {
+  opacity: 1;
 }
 
 /* Tabular numbers for timers & WPM readouts */
@@ -110,7 +154,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Custom subtle scrollbars */
+/* Custom subtle warm scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

@@ -84,6 +84,61 @@ function LibraryAndReaderContent() {
     null
   );
 
+  // Zen Reading Mode: dims toolbars & menus when Pacer or Audio is actively playing, restores on mouse move / touch
+  const [isPacerPlaying, setIsPacerPlaying] = useState<boolean>(false);
+  const [isAudioPlaying, setIsAudioPlaying] = useState<boolean>(false);
+  const [zenDimmed, setZenDimmed] = useState<boolean>(false);
+  const zenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isZenEligible = Boolean(
+    activeBookId && (isPacerPlaying || isAudioPlaying)
+  );
+
+  useEffect(() => {
+    if (!isZenEligible) {
+      setZenDimmed(false);
+      if (zenTimeoutRef.current) clearTimeout(zenTimeoutRef.current);
+      if (typeof document !== "undefined") {
+        document.documentElement.removeAttribute("data-zen-active");
+      }
+      return;
+    }
+
+    // Start Zen dimming shortly after Pacer or Audio starts
+    zenTimeoutRef.current = setTimeout(() => {
+      setZenDimmed(true);
+      if (typeof document !== "undefined") {
+        document.documentElement.setAttribute("data-zen-active", "true");
+      }
+    }, 1200);
+
+    const handleWakeUp = () => {
+      setZenDimmed(false);
+      if (typeof document !== "undefined") {
+        document.documentElement.removeAttribute("data-zen-active");
+      }
+      if (zenTimeoutRef.current) clearTimeout(zenTimeoutRef.current);
+      zenTimeoutRef.current = setTimeout(() => {
+        setZenDimmed(true);
+        if (typeof document !== "undefined") {
+          document.documentElement.setAttribute("data-zen-active", "true");
+        }
+      }, 2600);
+    };
+
+    window.addEventListener("mousemove", handleWakeUp, { passive: true });
+    window.addEventListener("touchstart", handleWakeUp, { passive: true });
+
+    return () => {
+      window.removeEventListener("mousemove", handleWakeUp);
+      window.removeEventListener("touchstart", handleWakeUp);
+      if (zenTimeoutRef.current) clearTimeout(zenTimeoutRef.current);
+      if (typeof document !== "undefined") {
+        document.documentElement.removeAttribute("data-zen-active");
+      }
+    };
+  }, [isZenEligible]);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Sync URL params (?book=...&mode=...)
@@ -362,8 +417,12 @@ function LibraryAndReaderContent() {
 
     return (
       <div className="space-y-5">
-        {/* Smart Reader Sticky Top Toolbar */}
-        <div className="p-4 rounded-2xl bg-surface border border-border flex flex-wrap items-center justify-between gap-4">
+        {/* Smart Reader Sticky Top Toolbar (fades softly in Zen Reading Mode) */}
+        <div
+          className={`p-4 rounded-2xl bg-surface border border-border flex flex-wrap items-center justify-between gap-4 transition-opacity duration-500 ${
+            zenDimmed ? "opacity-15 hover:opacity-100" : "opacity-100"
+          }`}
+        >
           {/* Left: Back button & Book Title */}
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -375,17 +434,17 @@ function LibraryAndReaderContent() {
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="font-bold text-base sm:text-lg truncate">
+                <h1 className="font-serif font-bold text-base sm:text-lg truncate">
                   {activeBook.title}
                 </h1>
-                <span className="text-[11px] px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-400 font-semibold shrink-0">
+                <span className="text-[11px] px-2 py-0.5 rounded bg-[#B85D3B]/15 text-[#B85D3B] font-semibold shrink-0">
                   %{pct}
                 </span>
               </div>
               <p className="text-xs text-muted truncate">
                 {activeBook.author} • {currentWordIndex.toLocaleString("tr-TR")} /{" "}
                 {activeBook.word_count.toLocaleString("tr-TR")} kelime •{" "}
-                <strong className="text-indigo-400">{currentWpm} WPM</strong>
+                <strong className="text-[#B85D3B]">{currentWpm} WPM</strong>
               </p>
             </div>
           </div>
@@ -404,7 +463,7 @@ function LibraryAndReaderContent() {
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 readingMode === "standard"
-                  ? "bg-indigo-600 text-white shadow-sm"
+                  ? "bg-[#B85D3B] text-[#F6F1E7] shadow-sm"
                   : "text-muted hover:text-foreground"
               }`}
             >
@@ -424,7 +483,7 @@ function LibraryAndReaderContent() {
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 readingMode === "pacer"
-                  ? "bg-indigo-600 text-white shadow-sm"
+                  ? "bg-[#B85D3B] text-[#F6F1E7] shadow-sm"
                   : "text-muted hover:text-foreground"
               }`}
             >
@@ -444,7 +503,7 @@ function LibraryAndReaderContent() {
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 readingMode === "rsvp"
-                  ? "bg-indigo-600 text-white shadow-sm"
+                  ? "bg-[#B85D3B] text-[#F6F1E7] shadow-sm"
                   : "text-muted hover:text-foreground"
               }`}
             >
@@ -464,7 +523,7 @@ function LibraryAndReaderContent() {
               }
               className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all ${
                 readerPrefs.autoRampEnabled
-                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 shadow-sm shadow-emerald-500/10"
+                  ? "bg-[#5C6B57]/15 border-[#5C6B57]/40 text-[#5C6B57] shadow-sm"
                   : "bg-surface-elevated border-border text-muted hover:text-foreground"
               }`}
               title="Aktifken her 2 dakikada veya 400 kelimede bir okuma hızı otomatik olarak +10 WPM artar"
@@ -474,7 +533,7 @@ function LibraryAndReaderContent() {
               <span
                 className={`px-1.5 py-0.5 rounded text-[10px] ${
                   readerPrefs.autoRampEnabled
-                    ? "bg-emerald-500 text-white"
+                    ? "bg-[#5C6B57] text-[#F6F1E7]"
                     : "bg-surface text-muted"
                 }`}
               >
@@ -486,8 +545,8 @@ function LibraryAndReaderContent() {
             <div className="hidden xl:flex rounded-xl bg-surface-elevated p-1 border border-border">
               {(
                 [
+                  { id: "serif", label: "Literata (Kitap)" },
                   { id: "sans", label: "Sans" },
-                  { id: "serif", label: "Serif" },
                   { id: "mono", label: "Mono" },
                 ] as const
               ).map((f) => (
@@ -539,7 +598,7 @@ function LibraryAndReaderContent() {
               onClick={() => setShowNotesPanel((v) => !v)}
               className={`px-3.5 py-2 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-all ${
                 showNotesPanel
-                  ? "bg-amber-500/20 border-amber-500/40 text-amber-400"
+                  ? "bg-[#B85D3B]/15 border-[#B85D3B]/40 text-[#B85D3B]"
                   : "bg-surface-elevated border-border text-foreground"
               }`}
             >
@@ -551,10 +610,10 @@ function LibraryAndReaderContent() {
 
         {/* Live Auto-Ramp Notification or Session Saved Banner */}
         {(headerRampBanner || sessionSavedBadge) && (
-          <div className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500/15 via-emerald-500/15 to-amber-500/15 border border-indigo-500/30 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="px-4 py-2.5 rounded-2xl bg-surface border border-[#B85D3B]/35 flex flex-wrap items-center justify-between gap-2 text-xs">
             {headerRampBanner && (
-              <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <span className="font-bold text-[#B85D3B] flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-[#5C6B57]" />
                 <span>
                   Hız İvmesi: {headerRampBanner.from} &rarr; {headerRampBanner.to}{" "}
                   WPM (+10 WPM Kademeli Artış Uygulandı)
@@ -562,7 +621,7 @@ function LibraryAndReaderContent() {
               </span>
             )}
             {sessionSavedBadge && (
-              <span className="font-semibold text-indigo-300">
+              <span className="font-semibold text-[#5C6B57]">
                 ✓ {sessionSavedBadge}
               </span>
             )}
@@ -578,6 +637,8 @@ function LibraryAndReaderContent() {
           currentWordIndex={currentWordIndex}
           wpm={currentWpm}
           autoRampEnabled={readerPrefs.autoRampEnabled}
+          zenDimmed={zenDimmed}
+          onPlayingStateChange={(playing) => setIsAudioPlaying(playing)}
           onWordIndexSync={(wordIdx) => {
             updateReadingProgress(
               activeBook.id,
@@ -611,19 +672,23 @@ function LibraryAndReaderContent() {
           <div className={showNotesPanel ? "lg:col-span-8" : "lg:col-span-12"}>
             {/* MODE A: SERBEST OKUMA (DOĞAL WPM ÖLÇER) */}
             {readingMode === "standard" && (
-              <div className="rounded-3xl bg-surface border-2 border-border overflow-hidden shadow-xl">
+              <div className="rounded-3xl bg-background border-2 border-border overflow-hidden shadow-lg">
                 <div className="h-1.5 w-full bg-surface-elevated">
                   <div
-                    className="h-full bg-indigo-500 transition-all duration-200"
+                    className="h-full bg-[#B85D3B] transition-all duration-200"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
 
                 {/* Natural WPM Meter Control Strip */}
-                <div className="px-6 py-3.5 bg-surface-elevated/60 border-b border-border flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div
+                  className={`px-6 py-3.5 bg-surface/70 border-b border-border flex flex-wrap items-center justify-between gap-3 text-xs transition-opacity duration-500 ${
+                    zenDimmed ? "opacity-15 hover:opacity-100" : "opacity-100"
+                  }`}
+                >
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-bold tabular-nums">
-                      <Gauge className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#B85D3B]/15 border border-[#B85D3B]/30 text-[#B85D3B] font-bold tabular-nums">
+                      <Gauge className="w-3.5 h-3.5 text-[#B85D3B]" />
                       <span>Doğal WPM Ölçer: {liveNaturalWpm} WPM</span>
                     </span>
                     <span className="text-muted tabular-nums">
@@ -633,7 +698,7 @@ function LibraryAndReaderContent() {
                         {freeReadingSeconds % 60} sn
                       </strong>{" "}
                       • Okunan:{" "}
-                      <strong className="text-emerald-400">
+                      <strong className="text-[#5C6B57]">
                         +{freeWordsDelta} kelime
                       </strong>
                     </span>
@@ -667,8 +732,8 @@ function LibraryAndReaderContent() {
                       }}
                       className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 border transition-all ${
                         isFreeReadingActive
-                          ? "bg-amber-500/15 border-amber-500/30 text-amber-300 hover:bg-amber-500/25"
-                          : "bg-indigo-600 border-indigo-500 text-white"
+                          ? "bg-[#B85D3B]/15 border-[#B85D3B]/30 text-[#B85D3B] hover:bg-[#B85D3B]/25"
+                          : "bg-[#B85D3B] border-[#B85D3B] text-[#F6F1E7]"
                       }`}
                     >
                       {isFreeReadingActive ? (
@@ -692,7 +757,11 @@ function LibraryAndReaderContent() {
                   </div>
                 </div>
 
-                <div className="px-6 py-2.5 bg-indigo-500/5 border-b border-border/60 text-[11px] text-muted flex items-center justify-between">
+                <div
+                  className={`px-6 py-2.5 bg-surface/40 border-b border-border/60 text-[11px] text-muted flex items-center justify-between transition-opacity duration-500 ${
+                    zenDimmed ? "opacity-15 hover:opacity-100" : "opacity-100"
+                  }`}
+                >
                   <span>
                     İpucu: Okurken ulaştığınız kelimeye tıkladığınızda{" "}
                     <strong className="text-foreground">Doğal WPM hızınız</strong>{" "}
@@ -711,7 +780,7 @@ function LibraryAndReaderContent() {
                           to
                         );
                       }}
-                      className="text-emerald-400 hover:underline font-semibold shrink-0 ml-2"
+                      className="text-[#5C6B57] hover:underline font-semibold shrink-0 ml-2"
                     >
                       ⚡ +10 WPM İvme Uygula ({currentWpm} &rarr;{" "}
                       {Math.min(1000, currentWpm + 10)})
@@ -728,7 +797,7 @@ function LibraryAndReaderContent() {
                 >
                   {tokenizedActiveBook.paragraphsOfWords.map(
                     (paraWords, pIdx) => (
-                      <p key={pIdx} className="text-foreground/95">
+                      <p key={pIdx} className="text-foreground">
                         {paraWords.map((token) => {
                           const isBookmarkedWord =
                             token.globalIndex === currentWordIndex;
@@ -779,9 +848,9 @@ function LibraryAndReaderContent() {
                                   setFreeStartWordIndex(token.globalIndex);
                                   setFreeReadingSeconds(0);
                                 }}
-                                className={`cursor-pointer rounded px-0.5 transition-colors ${
+                                className={`cursor-pointer rounded px-1 py-0.5 transition-colors ${
                                   isBookmarkedWord
-                                    ? "bg-indigo-500/25 text-indigo-400 font-semibold underline decoration-indigo-500"
+                                    ? "okurlab-pacer-focus font-medium"
                                     : "hover:bg-surface-elevated"
                                 }`}
                               >
@@ -807,6 +876,8 @@ function LibraryAndReaderContent() {
                 fontSize={readerPrefs.fontSize}
                 lineHeight={readerPrefs.lineHeight}
                 autoRampEnabled={readerPrefs.autoRampEnabled}
+                zenDimmed={zenDimmed}
+                onPlayingStateChange={(playing) => setIsPacerPlaying(playing)}
                 onToggleAutoRamp={() =>
                   updateReaderPrefs({
                     autoRampEnabled: !readerPrefs.autoRampEnabled,
@@ -985,11 +1056,11 @@ function LibraryAndReaderContent() {
       {/* Header & PDF/EPUB Upload Button */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 mb-1">
+          <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#B85D3B] mb-1">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Ocula VISION • Kitaplığım &amp; Kademeli Hız (Auto-Ramp) Okuyucu</span>
+            <span>OkurLab • Kitaplığım &amp; Kademeli Hız (Auto-Ramp) Okuyucu</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-serif font-bold tracking-tight">
             Kitaplığım &amp; PDF Kütüphanesi
           </h1>
           <p className="text-sm text-muted mt-1">

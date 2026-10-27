@@ -38,6 +38,8 @@ interface PiperNeuralAudioBarProps {
   currentWordIndex: number;
   wpm: number;
   autoRampEnabled: boolean;
+  zenDimmed?: boolean;
+  onPlayingStateChange?: (isPlaying: boolean) => void;
   onWordIndexSync: (wordIndex: number) => void;
   onWpmChange: (newWpm: number, rampNotice?: { from: number; to: number }) => void;
   onSessionSave: (stats: {
@@ -56,6 +58,8 @@ export function PiperNeuralAudioBar({
   currentWordIndex,
   wpm,
   autoRampEnabled,
+  zenDimmed = false,
+  onPlayingStateChange,
   onWordIndexSync,
   onWpmChange,
   onSessionSave,
@@ -106,6 +110,7 @@ export function PiperNeuralAudioBar({
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
+    onPlayingStateChange?.(isPlaying);
   }, [isPlaying]);
 
   useEffect(() => {
@@ -286,7 +291,7 @@ export function PiperNeuralAudioBar({
         navigator.mediaSession.metadata = new MediaMetadata({
           title: `${bookTitle} (Cümle #${sIdx + 1})`,
           artist: `${bookAuthor} • ${wpmRef.current} WPM`,
-          album: "Ocula VISION • Piper Neural TTS",
+          album: "OkurLab • Piper Neural TTS",
         });
         navigator.mediaSession.playbackState = "playing";
       } catch {
@@ -508,7 +513,13 @@ export function PiperNeuralAudioBar({
     sentences[activeSentenceIdx];
 
   return (
-    <div className="p-4 rounded-2xl bg-surface border-2 border-indigo-500/30 shadow-lg space-y-3">
+    <div
+      className={`p-4 rounded-2xl bg-surface border border-border shadow-sm space-y-3 transition-opacity duration-500 ${
+        zenDimmed && downloadPercent === null
+          ? "opacity-15 hover:opacity-100"
+          : "opacity-100"
+      }`}
+    >
       {/* Hidden HTML5 Audio Element for native mobile lock-screen & pitch-preserved playback */}
       <audio ref={audioRef} className="hidden" preload="auto" />
 
@@ -524,10 +535,10 @@ export function PiperNeuralAudioBar({
                 startAudioPlayback();
               }
             }}
-            className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all ${
+            className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm transition-all ${
               isPlaying
-                ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20"
-                : "bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/25"
+                ? "bg-[#96482B] hover:bg-[#783A24] text-[#F6F1E7]"
+                : "bg-[#B85D3B] hover:bg-[#96482B] text-[#F6F1E7]"
             }`}
           >
             {isPlaying ? (

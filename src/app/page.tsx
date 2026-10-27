@@ -182,11 +182,11 @@ export default function ReadingStudioPage() {
       {/* Studio Top Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 text-xs font-semibold mb-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-rose-400" />
-            <span>Ocula VISION • Okuma Stüdyosu &amp; Kademeli Hızlanma (Progressive WPM)</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#B85D3B]/15 border border-[#B85D3B]/30 text-[#B85D3B] text-xs font-semibold mb-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-[#B85D3B]" />
+            <span>OkurLab • Sıcak Sepya Kitap Stüdyosu &amp; Kademeli Hızlanma (Progressive WPM)</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-serif font-bold tracking-tight">
             Okuma Stüdyosu
           </h1>
         </div>
@@ -202,7 +202,7 @@ export default function ReadingStudioPage() {
                 onClick={() => setLastActiveBookId(b.id)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all truncate max-w-[180px] ${
                   isSelected
-                    ? "bg-indigo-600 border-indigo-500 text-white shadow-sm"
+                    ? "bg-[#B85D3B] border-[#B85D3B] text-[#F6F1E7] shadow-sm"
                     : "bg-surface border-border text-muted hover:text-foreground"
                 }`}
               >
@@ -219,11 +219,11 @@ export default function ReadingStudioPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* LEFT (7 COLS): LARGE "OKUMAYA DEVAM ET (ACTIVE BOOK)" CARD + WARMUP SUGGESTION */}
         <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
-          <div className="relative flex-1 rounded-3xl bg-gradient-to-br from-indigo-500/10 via-surface to-surface border-2 border-indigo-500/35 p-6 sm:p-7 overflow-hidden shadow-2xl flex flex-col justify-between gap-6">
-            {/* Optical Ambient Rings */}
-            <div className="pointer-events-none absolute -right-14 -top-14 w-64 h-64 rounded-full border border-indigo-500/15 flex items-center justify-center">
-              <div className="w-40 h-40 rounded-full border border-violet-500/15 flex items-center justify-center">
-                <div className="w-16 h-16 rounded-full bg-rose-500/10 blur-xl" />
+          <div className="relative flex-1 rounded-3xl bg-surface border-2 border-border p-6 sm:p-7 overflow-hidden shadow-md flex flex-col justify-between gap-6">
+            {/* Subtle Botanical Ambient Ring */}
+            <div className="pointer-events-none absolute -right-14 -top-14 w-64 h-64 rounded-full border border-[#B85D3B]/15 flex items-center justify-center">
+              <div className="w-40 h-40 rounded-full border border-[#5C6B57]/15 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-[#B85D3B]/10 blur-xl" />
               </div>
             </div>
 
@@ -233,10 +233,10 @@ export default function ReadingStudioPage() {
                   {/* Top Badge Row */}
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[11px] font-bold uppercase tracking-wider">
-                        Okumaya Devam Et • Active Book
+                      <span className="px-2.5 py-1 rounded-lg bg-[#B85D3B]/15 border border-[#B85D3B]/30 text-[#B85D3B] text-[11px] font-bold uppercase tracking-wider">
+                        Okumaya Devam Et • Aktif Kitap
                       </span>
-                      <span className="px-2.5 py-1 rounded-lg bg-surface-elevated border border-border text-xs font-semibold text-muted">
+                      <span className="px-2.5 py-1 rounded-lg bg-background border border-border text-xs font-semibold text-muted">
                         {activeBook.category}
                       </span>
                     </div>
@@ -677,19 +677,19 @@ export default function ReadingStudioPage() {
                     type="monotone"
                     dataKey="wpm"
                     name="Okuma Hızı (WPM)"
-                    stroke="#6366f1"
+                    stroke="#B85D3B"
                     strokeWidth={3}
-                    dot={{ r: 4, fill: "#6366f1", strokeWidth: 2, stroke: "#fff" }}
-                    activeDot={{ r: 6, fill: "#f43f5e" }}
+                    dot={{ r: 4, fill: "#B85D3B", strokeWidth: 2, stroke: "#F6F1E7" }}
+                    activeDot={{ r: 6, fill: "#96482B" }}
                   />
                   <Line
                     type="monotone"
                     dataKey="etkiliWpm"
                     name="Net Etkili Hız (E-WPM)"
-                    stroke="#10b981"
+                    stroke="#5C6B57"
                     strokeWidth={2}
                     strokeDasharray="4 4"
-                    dot={{ r: 3, fill: "#10b981" }}
+                    dot={{ r: 3, fill: "#5C6B57" }}
                   />
                 </LineChart>
               </ResponsiveContainer>

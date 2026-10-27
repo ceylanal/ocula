@@ -18,19 +18,20 @@ export default function AppleIcon() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background:
-            "linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #3b0764 100%)",
+          background: "#F6F1E7",
+          border: "6px solid #DFD5C3",
           borderRadius: "40px",
-          color: "white",
-          fontFamily: "sans-serif",
+          color: "#2C2520",
+          fontFamily: "serif",
         }}
       >
         <div
           style={{
-            width: "84px",
-            height: "48px",
-            borderRadius: "999px",
-            border: "5px solid #a5b4fc",
+            width: "68px",
+            height: "52px",
+            borderRadius: "14px",
+            background: "#EFE8DA",
+            border: "4px solid #4A5D4E",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -39,22 +40,37 @@ export default function AppleIcon() {
         >
           <div
             style={{
-              width: "20px",
-              height: "20px",
+              width: "26px",
+              height: "26px",
               borderRadius: "999px",
-              background: "#f43f5e",
+              background: "#E6D2B5",
+              border: "4px solid #B85D3B",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
-          />
+          >
+            <div
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "999px",
+                background: "#B85D3B",
+              }}
+            />
+          </div>
         </div>
         <div
           style={{
-            fontSize: "34px",
-            fontWeight: 900,
-            letterSpacing: "-1px",
+            fontSize: "30px",
+            fontWeight: 800,
+            letterSpacing: "-0.5px",
             lineHeight: 1,
+            display: "flex",
           }}
         >
-          Ocula
+          <span style={{ color: "#2C2520" }}>Okur</span>
+          <span style={{ color: "#B85D3B" }}>Lab</span>
         </div>
       </div>
     ),

@@ -1,11 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Literata, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 
-const inter = Inter({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin", "latin-ext"],
-  variable: "--font-inter",
+  variable: "--font-jakarta",
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+const literata = Literata({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-literata",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const viewport: Viewport = {
@@ -13,23 +20,23 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#f3ead6",
+  themeColor: "#F6F1E7",
 };
 
 export const metadata: Metadata = {
-  title: "Ocula — Göz Kasları, Görsel Algı ve Hızlı Okuma Sistemi",
+  title: "OkurLab — Sıcak Sepya Kitap Stüdyosu & Kademeli Okuma Laboratuvarı",
   description:
-    "Latince Oculus kökünden ilham alan Ocula ile göz kaslarınızı, periferal algınızı ve okuma hızınızı eğitin. PDF/EPUB destekli akıllı okuyucu.",
-  applicationName: "Ocula",
+    "Uzun süreli kitap okumaya uygun sıcak parşömen kağıt dokusu, PDF/EPUB okuyucu, çevrimdışı nöral sesli okuma ve odak pacer laboratuvarı.",
+  applicationName: "OkurLab",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Ocula",
+    title: "OkurLab",
   },
   openGraph: {
-    title: "Ocula — Göz Kasları, Görsel Algı ve Hızlı Okuma Sistemi",
+    title: "OkurLab — Sıcak Sepya Kitap Stüdyosu & Okuma Laboratuvarı",
     description:
-      "RSVP, Magic Pacer, Schulte 5x5 optik egzersizleri ve PDF/EPUB destekli Akıllı E-Kitap Kütüphanesi.",
+      "Göz yormayan sıcak sepya kağıt üzerinde PDF/EPUB okuma, Pacer odak bloğu ve çevrimdışı nöral sesli okuma deneyimi.",
     type: "website",
   },
 };
@@ -41,7 +48,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr" data-theme="sepia" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body
+        className={`${plusJakarta.variable} ${literata.variable} font-sans antialiased`}
+      >
         <AppShell>{children}</AppShell>
       </body>
     </html>

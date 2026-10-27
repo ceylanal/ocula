@@ -389,8 +389,8 @@ export function RsvpEngine({
         <div className="px-5 py-3 bg-surface-elevated/55 border-b border-border/70 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted font-medium tabular-nums">
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-2.5 py-1 rounded-full bg-surface border border-indigo-500/30 text-indigo-400 font-bold flex items-center gap-1.5">
-              <Crosshair className="w-3 h-3 text-rose-500" />
-              <span>OCULA FOVEA LOCK • {wpm} WPM</span>
+              <Crosshair className="w-3 h-3 text-[#B85D3B]" />
+              <span>OKURLAB ODAK KİLİDİ • {wpm} WPM</span>
             </span>
             {autoRampEnabled && (
               <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold flex items-center gap-1">
