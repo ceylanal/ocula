@@ -14,7 +14,19 @@ import {
   RotateCcw,
   ArrowRight,
   XCircle,
+  TrendingUp,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  BarChart,
+  Bar,
+} from "recharts";
 import { SPEED_TEST_ARTICLES } from "@/data/mockData";
 import { useSupereadStore } from "@/store/useSupereadStore";
 
@@ -31,7 +43,14 @@ export default function SpeedTestPage() {
   const [comprehensionScore, setComprehensionScore] = useState<number>(0);
 
   const startTimeRef = useRef<number | null>(null);
-  const { recordExercise, user } = useSupereadStore();
+  const { recordExercise, user, exerciseLogs } = useSupereadStore();
+
+  const chartData = exerciseLogs.slice(-10).map((log, i) => ({
+    name: log.label || `#${i + 1}`,
+    wpm: log.achieved_wpm,
+    anlama: log.accuracy_score,
+    etkiliWpm: Math.round(log.achieved_wpm * (log.accuracy_score / 100)),
+  }));
 
   const article =
     SPEED_TEST_ARTICLES.find((a) => a.id === selectedArticleId) ||
@@ -103,16 +122,15 @@ export default function SpeedTestPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-8 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Seviye Tespit ve Ölçümleme Motoru
+            Kalibrasyon &amp; Analiz
           </h1>
           <p className="text-sm text-muted mt-1">
-            Okuma hızınızı (WPM) ve okuduğunuzu anlama oranınızı (%) bilimsel
-            olarak ölçün.
+            WPM okuma hızınızı, kavrama oranınızı (%) kalibre edin ve detaylı hız/anlama grafiklerinizi inceleyin.
           </p>
         </div>
 
@@ -461,6 +479,156 @@ export default function SpeedTestPage() {
           </div>
         </motion.div>
       )}
+
+      {/* Detailed Calibration & Historical Analytics Charts */}
+      <div className="pt-4 border-t border-border/70 space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-400 mb-1">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Detaylı Optik Telemetri &amp; Kalibrasyon Grafikleri</span>
+            </div>
+            <h2 className="text-xl font-extrabold">
+              Ham Hız (WPM), Net Etkili Hız ve Anlama Oranı Analizi
+            </h2>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 font-bold">
+              Güncel: {user.current_wpm} WPM
+            </span>
+            <span className="px-3 py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold">
+              Kavrama: %{user.comprehension_rate}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* WPM & Effective WPM AreaChart */}
+          <div className="lg:col-span-7 p-6 rounded-3xl bg-surface border border-border space-y-4">
+            <div>
+              <h3 className="font-bold text-base">
+                Görsel Algı Hızı (WPM) &amp; Net Etkili Hız (E-WPM)
+              </h3>
+              <p className="text-xs text-muted">
+                Seviye testleri ve kitap okuma seanslarındaki hız gelişimi
+              </p>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={chartData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="calWpmGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.45} />
+                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                    </linearGradient>
+                    <linearGradient id="calEffGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="var(--border-color)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    stroke="var(--text-muted)"
+                    fontSize={12}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    stroke="var(--text-muted)"
+                    fontSize={12}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "var(--bg-surface)",
+                      borderColor: "var(--border-color)",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="wpm"
+                    name="Ham Hız (WPM)"
+                    stroke="#6366f1"
+                    strokeWidth={2.5}
+                    fillOpacity={1}
+                    fill="url(#calWpmGrad)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="etkiliWpm"
+                    name="Net Etkili Hız (E-WPM)"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#calEffGrad)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Comprehension BarChart */}
+          <div className="lg:col-span-5 p-6 rounded-3xl bg-surface border border-border space-y-4">
+            <div>
+              <h3 className="font-bold text-base">
+                Anlama ve Odak Doğruluk Oranı (%)
+              </h3>
+              <p className="text-xs text-muted">
+                Hız artarken bilişsel kavrama kalitesinin korunumu
+              </p>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="var(--border-color)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    stroke="var(--text-muted)"
+                    fontSize={12}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    stroke="var(--text-muted)"
+                    fontSize={12}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "var(--bg-surface)",
+                      borderColor: "var(--border-color)",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Bar
+                    dataKey="anlama"
+                    name="Anlama / Doğruluk (%)"
+                    fill="#10b981"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

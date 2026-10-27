@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   SkipBack,
   SkipForward,
+  TrendingUp,
 } from "lucide-react";
 import { tokenizeParagraphs } from "@/lib/textUtils";
 
@@ -21,7 +22,15 @@ interface MagicPacerEngineProps {
   fontClass?: string;
   fontSize?: number;
   lineHeight?: number;
+  autoRampEnabled?: boolean;
+  onToggleAutoRamp?: () => void;
   onWordIndexChange?: (index: number, wpm: number) => void;
+  onSessionSave?: (stats: {
+    wordIndex: number;
+    wordsRead: number;
+    durationSeconds: number;
+    finalWpm: number;
+  }) => void;
   onFinishSession?: (stats: {
     wpm: number;
     durationSeconds: number;
@@ -38,7 +47,10 @@ export function MagicPacerEngine({
   fontClass = "font-sans",
   fontSize = 19,
   lineHeight = 1.9,
+  autoRampEnabled = false,
+  onToggleAutoRamp,
   onWordIndexChange,
+  onSessionSave,
   onFinishSession,
 }: MagicPacerEngineProps) {
   const { words, paragraphsOfWords } = useMemo(
@@ -55,15 +67,79 @@ export function MagicPacerEngine({
   const [maskMode, setMaskMode] = useState<MaskIntensity>("blur");
   const [isPlaying, setIsPlaying] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [rampNotification, setRampNotification] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
+  const [lastSavedToast, setLastSavedToast] = useState<string | null>(null);
 
   const activeWordElRef = useRef<HTMLSpanElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sessionStartRef = useRef<number | null>(null);
   const accumulatedSecondsRef = useRef<number>(0);
+  const unsavedWordsRef = useRef<number>(0);
+  const unsavedSecondsRef = useRef<number>(0);
+  const wordsSinceRampRef = useRef<number>(0);
+  const secondsSinceRampRef = useRef<number>(0);
+  const latestStateRef = useRef({
+    currentIndex,
+    wpm,
+    isPlaying,
+  });
+
+  useEffect(() => {
+    latestStateRef.current = { currentIndex, wpm, isPlaying };
+  }, [currentIndex, wpm, isPlaying]);
+
+  const flushSessionSave = (reason: "pause" | "unmount") => {
+    let activeElapsed = 0;
+    if (sessionStartRef.current) {
+      activeElapsed = (Date.now() - sessionStartRef.current) / 1000;
+      accumulatedSecondsRef.current += activeElapsed;
+      unsavedSecondsRef.current += activeElapsed;
+      sessionStartRef.current = null;
+    }
+    const wordsDelta = unsavedWordsRef.current;
+    const secDelta = Math.round(unsavedSecondsRef.current);
+
+    if (wordsDelta > 0 || secDelta >= 2) {
+      onSessionSave?.({
+        wordIndex: latestStateRef.current.currentIndex,
+        wordsRead: wordsDelta,
+        durationSeconds: Math.max(1, secDelta),
+        finalWpm: latestStateRef.current.wpm,
+      });
+      if (reason === "pause") {
+        setLastSavedToast(
+          `Kaydedildi: Kelime #${latestStateRef.current.currentIndex + 1} • +${wordsDelta} kelime • ${latestStateRef.current.wpm} WPM`
+        );
+      }
+      unsavedWordsRef.current = 0;
+      unsavedSecondsRef.current = 0;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      flushSessionSave("unmount");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!rampNotification) return;
+    const t = setTimeout(() => setRampNotification(null), 4500);
+    return () => clearTimeout(t);
+  }, [rampNotification]);
+
+  useEffect(() => {
+    if (!lastSavedToast) return;
+    const t = setTimeout(() => setLastSavedToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [lastSavedToast]);
 
   // Sync external initialWpm when updated from URL or parent
   useEffect(() => {
-    if (initialWpm && initialWpm >= 100 && initialWpm <= 1000) {
+    if (initialWpm && initialWpm >= 100 && initialWpm <= 1000 && !isPlaying) {
       setWpm(initialWpm);
     }
   }, [initialWpm]);
@@ -110,14 +186,10 @@ export function MagicPacerEngine({
     }
   }, [currentIndex]);
 
-  // Timer loop for Magic Pacer progression
+  // Timer loop for Magic Pacer progression + Auto-Ramp (+10 WPM per 400 words or 120s)
   useEffect(() => {
     if (!isPlaying || totalWords === 0) {
-      if (sessionStartRef.current) {
-        accumulatedSecondsRef.current +=
-          (Date.now() - sessionStartRef.current) / 1000;
-        sessionStartRef.current = null;
-      }
+      flushSessionSave("pause");
       return;
     }
 
@@ -128,6 +200,24 @@ export function MagicPacerEngine({
     const intervalMs = Math.max(55, Math.round((60000 / wpm) * spanSize));
 
     const timer = setInterval(() => {
+      unsavedWordsRef.current += spanSize;
+      wordsSinceRampRef.current += spanSize;
+      secondsSinceRampRef.current += intervalMs / 1000;
+
+      if (
+        autoRampEnabled &&
+        (wordsSinceRampRef.current >= 400 || secondsSinceRampRef.current >= 120)
+      ) {
+        wordsSinceRampRef.current = 0;
+        secondsSinceRampRef.current = 0;
+        setWpm((prevWpm) => {
+          if (prevWpm >= 1000) return prevWpm;
+          const nextWpm = Math.min(1000, prevWpm + 10);
+          setRampNotification({ from: prevWpm, to: nextWpm });
+          return nextWpm;
+        });
+      }
+
       setCurrentIndex((prev) => {
         const next = prev + spanSize;
         if (next >= totalWords) {
@@ -152,7 +242,7 @@ export function MagicPacerEngine({
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isPlaying, wpm, spanSize, totalWords, onFinishSession]);
+  }, [isPlaying, wpm, spanSize, totalWords, autoRampEnabled, onFinishSession]);
 
   // Keyboard shortcuts (Space to play/pause, arrows for WPM & seek)
   useEffect(() => {
@@ -336,16 +426,37 @@ export function MagicPacerEngine({
         </div>
 
         <div className="px-6 py-3 bg-surface-elevated/50 border-b border-border flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-          <span className="flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-            Herhangi bir kelimeye tıklayarak odak çerçevesini o noktaya
-            taşıyabilirsiniz (Boşluk tuşu: Başlat/Duraklat).
-          </span>
-          <span>
-            İlerleme:{" "}
-            <strong className="text-foreground">%{progressPercent}</strong> (
-            {currentIndex + 1}/{totalWords})
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              Herhangi bir kelimeye tıklayarak odak çerçevesini o noktaya
+              taşıyabilirsiniz (Boşluk tuşu: Başlat/Duraklat).
+            </span>
+            {autoRampEnabled && (
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" />
+                <span>Auto-Ramp (+10 WPM / 400 kelime)</span>
+              </span>
+            )}
+            {rampNotification && (
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold animate-pulse">
+                ⚡ Hız İvmesi: {rampNotification.from} &rarr;{" "}
+                {rampNotification.to} WPM
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {lastSavedToast && (
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-semibold">
+                {lastSavedToast}
+              </span>
+            )}
+            <span>
+              İlerleme:{" "}
+              <strong className="text-foreground">%{progressPercent}</strong> (
+              {currentIndex + 1}/{totalWords})
+            </span>
+          </div>
         </div>
 
         <div

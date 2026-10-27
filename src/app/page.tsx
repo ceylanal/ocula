@@ -1,14 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Zap,
-  Brain,
   Flame,
   TrendingUp,
   CheckCircle2,
-  Circle,
   ArrowRight,
   BookOpen,
   Eye,
@@ -16,670 +15,700 @@ import {
   Clock,
   RotateCcw,
   Sparkles,
-  Crosshair,
+  Upload,
+  FileText,
+  Play,
+  Grid3X3,
+  Target,
 } from "lucide-react";
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
-  BarChart,
-  Bar,
 } from "recharts";
 import { useSupereadStore } from "@/store/useSupereadStore";
-import { generateAlgorithmicDailyPlan } from "@/lib/dailyPlanner";
+import { parseUploadedBookFile } from "@/lib/fileParser";
+import { Book } from "@/types";
 
-const EXERCISE_LABELS: Record<string, string> = {
+const MODE_LABELS: Record<string, string> = {
+  standard: "Serbest Okuma (Doğal WPM)",
+  pacer: "Pacer (Odak Bloğu)",
   rsvp: "RSVP Odak",
-  pacer: "Magic Pacer",
-  schulte: "Schulte 5x5",
-  speed_test: "Optik Seviye Testi",
-  peripheral: "Çevresel Görüş",
 };
 
-export default function DashboardPage() {
+export default function ReadingStudioPage() {
+  const router = useRouter();
   const {
     user,
-    exerciseLogs,
-    dailyTasks,
-    toggleDailyTask,
-    regenerateDailyPlan,
     books,
+    lastActiveBookId,
+    setLastActiveBookId,
     readingProgress,
+    exerciseLogs,
+    dailyReadingMinutes,
+    dailyReadingGoalMinutes,
+    dailyWordsRead,
+    dailyWordsGoal,
+    readerPrefs,
+    updateReaderPrefs,
+    addBook,
     resetDemoData,
   } = useSupereadStore();
 
   const [mounted, setMounted] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isParsingFile, setIsParsingFile] = useState(false);
+  const [parsingStatus, setParsingStatus] = useState("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  const activeBook = useMemo(() => {
+    return (
+      books.find((b) => b.id === lastActiveBookId) ||
+      books[0]
+    );
+  }, [books, lastActiveBookId]);
+
+  const activeProg = activeBook ? readingProgress[activeBook.id] : undefined;
+
+  // Compute realistic progress display for Active Book card
+  const totalBookWords = activeBook ? Math.max(1, activeBook.word_count) : 36000;
+  const currentWordIdx = activeProg?.current_word_index ?? 0;
+
+  // If the user hasn't advanced far yet in the default demo book, show actual or meaningful progress
+  const progressPct = Math.min(
+    100,
+    Math.max(
+      currentWordIdx > 0 ? 1 : 0,
+      Math.round((currentWordIdx / totalBookWords) * 100)
+    )
+  );
+  const bookWpm =
+    activeProg?.preferred_wpm ?? user.current_wpm ?? readerPrefs.defaultWpm;
+  const savedMode = activeProg?.reading_mode ?? "pacer";
+  const remainingWords = Math.max(0, totalBookWords - currentWordIdx);
+  const estimatedRemainingMinutes = Math.max(
+    1,
+    Math.ceil(remainingWords / Math.max(120, bookWpm))
+  );
+
+  // Last 7 days progressive WPM evolution chart data
+  const last7DaysWpmData = useMemo(() => {
+    const recent = exerciseLogs.slice(-7);
+    const dayLabels = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Bugün"];
+    return recent.map((log, idx) => ({
+      day: log.label || dayLabels[idx] || `Gün ${idx + 1}`,
+      wpm: log.achieved_wpm,
+      etkiliWpm: Math.round(log.achieved_wpm * (log.accuracy_score / 100)),
+      anlama: log.accuracy_score,
+    }));
+  }, [exerciseLogs]);
+
+  const wpmGain7Days = useMemo(() => {
+    if (last7DaysWpmData.length < 2) return 45;
+    const first = last7DaysWpmData[0].wpm;
+    const last = last7DaysWpmData[last7DaysWpmData.length - 1].wpm;
+    return last - first;
+  }, [last7DaysWpmData]);
+
+  const handleUploadFile = async (file: File) => {
+    setIsParsingFile(true);
+    setParsingStatus("PDF / Kitap metne dönüştürülüyor...");
+    setUploadError(null);
+
+    try {
+      const parsed = await parseUploadedBookFile(file, (status) => {
+        setParsingStatus(status);
+      });
+      const pageInfo = parsed.pageCount ? `${parsed.pageCount} sayfa, ` : "";
+      const newBook: Book = {
+        id: `book-custom-${Date.now()}`,
+        title: parsed.title,
+        author: parsed.author,
+        category: `${parsed.format} Kitaplığı`,
+        difficulty_level: "Orta",
+        word_count: parsed.wordCount,
+        cover_gradient:
+          parsed.format === "PDF"
+            ? "from-rose-600 via-orange-600 to-amber-700"
+            : "from-indigo-600 via-violet-600 to-purple-700",
+        summary: `${file.name} (${parsed.format}) dosyasından dönüştürüldü (${pageInfo}${parsed.paragraphs.length} paragraf, ${parsed.wordCount.toLocaleString("tr-TR")} kelime).`,
+        content: parsed.paragraphs,
+        is_custom: true,
+      };
+
+      addBook(newBook);
+      router.push(`/library?book=${newBook.id}&mode=pacer`);
+    } catch (err) {
+      console.error(err);
+      setUploadError(
+        "Dosya dönüştürülürken hata oluştu. Lütfen geçerli bir .pdf, .epub, .txt veya .md dosyası seçin."
+      );
+    } finally {
+      setIsParsingFile(false);
+      setParsingStatus("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   if (!mounted) {
     return (
       <div className="space-y-6 animate-pulse">
-        <div className="h-44 rounded-3xl bg-surface border border-border" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="h-28 rounded-2xl bg-surface border border-border"
-            />
-          ))}
-        </div>
+        <div className="h-72 rounded-3xl bg-surface border border-border" />
+        <div className="h-64 rounded-3xl bg-surface border border-border" />
       </div>
     );
   }
 
-  const effectiveWpm = Math.round(
-    user.current_wpm * (user.comprehension_rate / 100)
+  const minutesPct = Math.min(
+    100,
+    Math.round((dailyReadingMinutes / Math.max(1, dailyReadingGoalMinutes)) * 100)
   );
-  const improvementPct = Math.round(
-    ((user.current_wpm - user.baseline_wpm) /
-      Math.max(1, user.baseline_wpm)) *
-      100
-  );
-
-  const completedTasksCount = dailyTasks.filter((t) => t.completed).length;
-  const routineProgressPct = Math.round(
-    (completedTasksCount / Math.max(1, dailyTasks.length)) * 100
-  );
-
-  // Speed spectrum position (100 WPM to 800 WPM)
-  const spectrumPositionPct = Math.min(
-    98,
-    Math.max(4, Math.round(((user.current_wpm - 100) / 700) * 100))
-  );
-
-  const speedTierLabel =
-    user.current_wpm >= 550
-      ? "Ocula Elit Görsel Atlet"
-      : user.current_wpm >= 380
-      ? "Parafoveal Blok Okuyucu"
-      : user.current_wpm >= 260
-      ? "Ritmik Sakkadik Okuyucu"
-      : "İç Seslendirme Aşaması";
-
-  const chartData = exerciseLogs.slice(-10).map((log, i) => ({
-    name: log.label || `#${i + 1}`,
-    wpm: log.achieved_wpm,
-    anlama: log.accuracy_score,
-    etkiliWpm: Math.round(log.achieved_wpm * (log.accuracy_score / 100)),
-    tip: EXERCISE_LABELS[log.exercise_type] || log.exercise_type,
-  }));
-
-  const activeBook = books[0];
-  const activeProg = activeBook ? readingProgress[activeBook.id] : undefined;
-  const activeBookPct =
-    activeBook && activeProg
-      ? Math.min(
-          100,
-          Math.round(
-            (activeProg.current_word_index /
-              Math.max(1, activeBook.word_count)) *
-              100
-          )
-        )
-      : 18;
-
-  const planMeta = generateAlgorithmicDailyPlan(
-    user.current_wpm,
-    user.comprehension_rate
+  const wordsPct = Math.min(
+    100,
+    Math.round((dailyWordsRead / Math.max(1, dailyWordsGoal)) * 100)
   );
 
   return (
     <div className="space-y-7">
-      {/* Hero Ocula Optical Command Center */}
-      <div className="relative rounded-3xl bg-gradient-to-br from-indigo-950/60 via-surface to-surface border border-indigo-500/30 p-6 sm:p-8 overflow-hidden shadow-2xl">
-        {/* Decorative Background Optical Rings */}
-        <div className="pointer-events-none absolute -right-16 -top-16 w-72 h-72 rounded-full border border-indigo-500/15 flex items-center justify-center">
-          <div className="w-48 h-48 rounded-full border border-violet-500/15 flex items-center justify-center">
-            <div className="w-20 h-20 rounded-full bg-rose-500/10 blur-xl" />
+      {/* Studio Top Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 text-xs font-semibold mb-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+            <span>Ocula VISION • Okuma Stüdyosu &amp; Kademeli Hızlanma (Progressive WPM)</span>
           </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            Okuma Stüdyosu
+          </h1>
         </div>
 
-        <div className="relative z-10 space-y-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="space-y-2.5 max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 text-xs font-semibold">
-                <Crosshair className="w-3.5 h-3.5 text-rose-400" />
-                <span>Ocula • Göz Kasları ve Nöro-Görsel Algı Laboratuvarı</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight">
-                Göz Kasların Bugün{" "}
-                <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-rose-400 bg-clip-text text-transparent">
-                  {user.current_wpm} WPM
-                </span>{" "}
-                Frekansında Çalışıyor
-              </h1>
-              <p className="text-sm text-muted leading-relaxed">
-                Başlangıç seviyen olan{" "}
-                <strong className="text-foreground">
-                  {user.baseline_wpm} WPM
-                </strong>{" "}
-                noktasından{" "}
-                <strong className="text-emerald-400">
-                  +{improvementPct}% ivmeyle
-                </strong>{" "}
-                yükseldin. Mevcut optik sınıfın:{" "}
-                <strong className="text-indigo-400">{speedTierLabel}</strong>.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 shrink-0">
-              <Link
-                href="/drills"
-                className="px-5 py-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-sm font-bold flex items-center gap-2 shadow-xl shadow-indigo-600/25 transition-all"
-              >
-                <Eye className="w-4 h-4" />
-                <span>Optik Antrenmana Başla</span>
-              </Link>
-              <Link
-                href="/speed-test"
-                className="px-5 py-3.5 rounded-2xl bg-surface-elevated hover:bg-indigo-500/10 text-foreground border border-border hover:border-indigo-500/40 text-sm font-semibold flex items-center gap-2 transition-all"
-              >
-                <Gauge className="w-4 h-4 text-indigo-400" />
-                <span>Hızını Ölç</span>
-              </Link>
-            </div>
-          </div>
-
-          {/* Visual Ocula Speed Spectrum Bar */}
-          <div className="pt-2 border-t border-border/60 space-y-2">
-            <div className="flex items-center justify-between text-[11px] text-muted font-medium">
-              <span>150 WPM (İç Seslendirme)</span>
-              <span>300 WPM (Sakkadik Ritm)</span>
-              <span>500 WPM (Parafoveal Blok)</span>
-              <span>750+ WPM (Ocula Elit)</span>
-            </div>
-            <div className="relative h-2.5 w-full rounded-full bg-surface-elevated border border-border overflow-visible">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-rose-500 transition-all duration-500"
-                style={{ width: `${spectrumPositionPct}%` }}
-              />
-              {/* Glowing Marker Dot */}
-              <div
-                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-rose-500 border-2 border-white shadow-lg shadow-rose-500/50 transition-all duration-500"
-                style={{ left: `${spectrumPositionPct}%` }}
-                title={`Sizin Hızınız: ${user.current_wpm} WPM`}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 4 Key Telemetry KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl bg-surface border border-border hover:border-indigo-500/40 transition-all space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted">
-              Görsel Okuma Hızı
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center text-indigo-400">
-              <Zap className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold tabular-nums">
-              {user.current_wpm}
-            </span>
-            <span className="text-xs text-muted font-semibold">WPM</span>
-          </div>
-          <div className="text-xs text-emerald-400 font-medium flex items-center gap-1">
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>
-              Başlangıca göre{" "}
-              {improvementPct >= 0 ? `+${improvementPct}%` : `${improvementPct}%`}
-            </span>
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-surface border border-border hover:border-emerald-500/40 transition-all space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted">
-              Bilişsel Kavrama Oranı
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
-              <Brain className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold tabular-nums text-emerald-400">
-              %{user.comprehension_rate}
-            </span>
-            <span className="text-xs text-muted font-semibold">Doğruluk</span>
-          </div>
-          <div className="text-xs text-muted">
-            Optik seviye testi anlama ortalaması
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-surface border border-border hover:border-violet-500/40 transition-all space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted">
-              Net Etkili Hız (E-WPM)
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center text-violet-400">
-              <Gauge className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold tabular-nums text-violet-400">
-              {effectiveWpm}
-            </span>
-            <span className="text-xs text-muted font-semibold">E-WPM</span>
-          </div>
-          <div className="text-xs text-muted">
-            Ham Hız × Anlama Oranı net çıktısı
-          </div>
-        </div>
-
-        <div className="p-5 rounded-2xl bg-surface border border-border hover:border-amber-500/40 transition-all space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted">
-              Göz Kasları Disiplini
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center text-amber-400">
-              <Flame className="w-4 h-4 fill-amber-400" />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold tabular-nums text-amber-400">
-              {user.streak_days} Gün
-            </span>
-            <span className="text-xs text-muted font-semibold">Seri</span>
-          </div>
-          <div className="text-xs text-muted">
-            Toplam {exerciseLogs.length} optik seans kaydedildi
-          </div>
-        </div>
-      </div>
-
-      {/* Middle Row: Algorithmic Daily Exercise Chain + Continue Smart Reader Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Phase 3: Algorithmic Daily Assigned Workout Chain */}
-        <div className="lg:col-span-7 p-6 rounded-3xl bg-surface border border-border space-y-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 text-[11px] font-semibold mb-1.5">
-                <Sparkles className="w-3 h-3" />
-                <span>Ocula Algoritmik Reçete • {planMeta.protocolBadge}</span>
-              </div>
-              <h2 className="text-lg font-bold">{planMeta.protocolName}</h2>
-            </div>
-
-            <div className="flex items-center gap-3">
+        {/* Active Book Selector Pills (Quick switch between books) */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <span className="text-xs text-muted shrink-0">Aktif Kitap:</span>
+          {books.slice(0, 4).map((b) => {
+            const isSelected = activeBook?.id === b.id;
+            return (
               <button
-                onClick={regenerateDailyPlan}
-                className="px-3 py-1.5 rounded-xl bg-surface-elevated hover:border-indigo-500/50 border border-border text-xs font-semibold flex items-center gap-1.5 transition-all"
-                title="Güncel WPM ve Anlama Oranınıza göre günlük 15 dk rutini yeniden hesapla"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Yeniden Kalibre Et</span>
-              </button>
-              <div className="text-right">
-                <span className="text-sm font-bold text-indigo-400 tabular-nums">
-                  {completedTasksCount} / {dailyTasks.length}
-                </span>
-                <div className="w-20 h-1.5 rounded-full bg-surface-elevated mt-1 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300"
-                    style={{ width: `${routineProgressPct}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Algorithmic Rationale Box */}
-          <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <p className="text-muted leading-relaxed">
-              <strong className="text-foreground">Nöro-Görsel Analiz:</strong>{" "}
-              {planMeta.focusGoal}
-            </p>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="px-2.5 py-1 rounded-lg bg-surface border border-border font-semibold text-indigo-400 tabular-nums">
-                RSVP: {planMeta.recommendedRsvpWpm} WPM
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-surface border border-border font-semibold text-emerald-400 tabular-nums">
-                Pacer: {planMeta.recommendedPacerWpm} WPM
-              </span>
-            </div>
-          </div>
-
-          {/* Stepper Task List */}
-          <div className="space-y-3">
-            {dailyTasks.map((task, idx) => (
-              <div
-                key={task.id}
-                className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-4 ${
-                  task.completed
-                    ? "bg-emerald-500/5 border-emerald-500/25"
-                    : "bg-surface-elevated/60 border-border hover:border-indigo-500/40"
+                key={b.id}
+                onClick={() => setLastActiveBookId(b.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all truncate max-w-[180px] ${
+                  isSelected
+                    ? "bg-indigo-600 border-indigo-500 text-white shadow-sm"
+                    : "bg-surface border-border text-muted hover:text-foreground"
                 }`}
               >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <button
-                    onClick={() => toggleDailyTask(task.id)}
-                    className="shrink-0 text-muted hover:text-indigo-400 transition-colors"
-                    title="Tamamlandı olarak işaretle"
-                  >
-                    {task.completed ? (
-                      <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                    ) : (
-                      <Circle className="w-6 h-6" />
-                    )}
-                  </button>
-                  <div className="min-w-0">
+                {b.title}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* =====================================================================
+          ROW 1: ACTIVE BOOK ("OKUMAYA DEVAM ET") + QUICK PDF/EPUB DROPZONE
+      ===================================================================== */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* LEFT (7 COLS): LARGE "OKUMAYA DEVAM ET (ACTIVE BOOK)" CARD + WARMUP SUGGESTION */}
+        <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
+          <div className="relative flex-1 rounded-3xl bg-gradient-to-br from-indigo-950/70 via-surface to-surface border-2 border-indigo-500/35 p-6 sm:p-7 overflow-hidden shadow-2xl flex flex-col justify-between gap-6">
+            {/* Optical Ambient Rings */}
+            <div className="pointer-events-none absolute -right-14 -top-14 w-64 h-64 rounded-full border border-indigo-500/15 flex items-center justify-center">
+              <div className="w-40 h-40 rounded-full border border-violet-500/15 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-rose-500/10 blur-xl" />
+              </div>
+            </div>
+
+            {activeBook && (
+              <>
+                <div className="relative z-10 space-y-4">
+                  {/* Top Badge Row */}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-surface border border-border text-indigo-400">
-                        Adım {idx + 1}
+                      <span className="px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-[11px] font-bold uppercase tracking-wider">
+                        Okumaya Devam Et • Active Book
                       </span>
-                      <span
-                        className={`font-semibold text-sm truncate ${
-                          task.completed
-                            ? "line-through text-muted"
-                            : "text-foreground"
-                        }`}
-                      >
-                        {task.title}
+                      <span className="px-2.5 py-1 rounded-lg bg-surface-elevated border border-border text-xs font-semibold text-muted">
+                        {activeBook.category}
                       </span>
                     </div>
-                    <p className="text-xs text-muted truncate mt-0.5">
-                      {task.subtitle}
-                    </p>
+
+                    <button
+                      onClick={() =>
+                        updateReaderPrefs({
+                          autoRampEnabled: !readerPrefs.autoRampEnabled,
+                        })
+                      }
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center gap-1 transition-all ${
+                        readerPrefs.autoRampEnabled
+                          ? "bg-emerald-500/15 border-emerald-500/35 text-emerald-400"
+                          : "bg-surface-elevated border-border text-muted"
+                      }`}
+                      title="Okurken her 2 dakikada veya 400 kelimede bir +10 WPM otomatik hız artışı"
+                    >
+                      <TrendingUp className="w-3 h-3" />
+                      <span>
+                        Auto-Ramp: {readerPrefs.autoRampEnabled ? "+10 WPM AÇIK" : "KAPALI"}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Book Title & Author */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-snug">
+                        {activeBook.title}
+                      </h2>
+                      <p className="text-xs sm:text-sm text-muted">
+                        {activeBook.author} • Son Mod:{" "}
+                        <strong className="text-indigo-400">
+                          {MODE_LABELS[savedMode] || "Pacer"}
+                        </strong>
+                      </p>
+                    </div>
+                    <div
+                      className={`w-14 h-20 rounded-2xl bg-gradient-to-br ${activeBook.cover_gradient} flex items-center justify-center text-white shadow-xl border border-white/15 shrink-0`}
+                    >
+                      <BookOpen className="w-6 h-6" />
+                    </div>
+                  </div>
+
+                  {/* Progress Bar: % and Word Count */}
+                  <div className="p-4 rounded-2xl bg-surface/85 border border-border space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold text-muted">
+                        Kitap İlerlemesi
+                      </span>
+                      <span className="font-extrabold text-sm text-foreground tabular-nums">
+                        %{progressPct}{" "}
+                        <span className="text-muted font-medium">
+                          — {currentWordIdx.toLocaleString("tr-TR")} /{" "}
+                          {totalBookWords.toLocaleString("tr-TR")} kelime
+                        </span>
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full rounded-full bg-surface-elevated overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-emerald-400 transition-all duration-500"
+                        style={{ width: `${ Math.max(4, progressPct) }%` }}
+                      />
+                    </div>
+
+                    {/* 3 Telemetry Pills inside Active Book */}
+                    <div className="grid grid-cols-3 gap-2 pt-1.5">
+                      <div className="p-2.5 rounded-xl bg-surface-elevated/80 border border-border/80">
+                        <div className="text-[10px] uppercase tracking-wider text-muted font-semibold">
+                          Mevcut Hızın
+                        </div>
+                        <div className="text-base sm:text-lg font-extrabold text-indigo-400 tabular-nums flex items-baseline gap-1 mt-0.5">
+                          {bookWpm}
+                          <span className="text-[10px] font-semibold text-muted">
+                            WPM
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-surface-elevated/80 border border-border/80">
+                        <div className="text-[10px] uppercase tracking-wider text-muted font-semibold">
+                          Tahmini Bitiş
+                        </div>
+                        <div className="text-base sm:text-lg font-extrabold text-emerald-400 tabular-nums flex items-baseline gap-1 mt-0.5">
+                          ~{estimatedRemainingMinutes}
+                          <span className="text-[10px] font-semibold text-muted">
+                            dk
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 rounded-xl bg-surface-elevated/80 border border-border/80">
+                        <div className="text-[10px] uppercase tracking-wider text-muted font-semibold">
+                          Kademeli İvme
+                        </div>
+                        <div className="text-base sm:text-lg font-extrabold text-amber-400 tabular-nums flex items-baseline gap-1 mt-0.5">
+                          +10
+                          <span className="text-[10px] font-semibold text-muted">
+                            WPM / 2dk
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs text-muted flex items-center gap-1 tabular-nums">
-                    <Clock className="w-3.5 h-3.5" />
-                    {task.duration_label}
-                  </span>
+                {/* Primary CTA: Kaldığın Yerden Devam Et + Mode Quick Links */}
+                <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
                   <Link
-                    href={task.target_href}
-                    className="px-3.5 py-2 rounded-xl bg-indigo-600/15 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 text-xs font-semibold flex items-center gap-1 transition-all"
+                    href={`/library?book=${activeBook.id}&mode=${savedMode}`}
+                    className="flex-1 py-4 px-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 hover:from-indigo-500 hover:to-violet-500 text-white font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-xl shadow-indigo-600/30 transition-all"
                   >
-                    <span>Başlat</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <Play className="w-5 h-5 fill-current" />
+                    <span>Kaldığın Yerden Devam Et</span>
+                    <ArrowRight className="w-4 h-4" />
                   </Link>
+
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/library?book=${activeBook.id}&mode=pacer`}
+                      className="flex-1 sm:flex-initial py-4 px-3.5 rounded-2xl bg-surface-elevated hover:bg-indigo-500/15 border border-border hover:border-indigo-500/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                      title="Pacer (Odak Bloğu) modunda aç"
+                    >
+                      <Eye className="w-4 h-4 text-indigo-400" />
+                      <span>Pacer</span>
+                    </Link>
+                    <Link
+                      href={`/library?book=${activeBook.id}&mode=rsvp`}
+                      className="flex-1 sm:flex-initial py-4 px-3.5 rounded-2xl bg-surface-elevated hover:bg-rose-500/15 border border-border hover:border-rose-500/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                      title="RSVP Odak modunda aç"
+                    >
+                      <Zap className="w-4 h-4 text-rose-400" />
+                      <span>RSVP</span>
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            ))}
+              </>
+            )}
+          </div>
+
+          {/* Requirement 4: Pre-Reading Warmup Suggestion directly below Active Book Card */}
+          <div className="px-4 py-3 rounded-2xl bg-surface/90 border border-border/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-muted">
+              <Grid3X3 className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>
+                Okuma öncesi göz kaslarını ısıtmak ister misin?
+              </span>
+            </div>
+            <Link
+              href="/drills?tab=schulte"
+              className="font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+            >
+              <span>60 sn Schulte Tablosu</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
         </div>
 
-        {/* Smart Reader Quick Resume Card */}
-        <div className="lg:col-span-5 p-6 rounded-3xl bg-surface border border-border flex flex-col justify-between space-y-5">
-          <div className="space-y-4">
+        {/* RIGHT (5 COLS): QUICK "YENİ PDF / EPUB / METİN YÜKLE" DROPZONE CARD */}
+        <div className="lg:col-span-5 p-6 rounded-3xl bg-surface border border-border flex flex-col justify-between space-y-4 shadow-xl">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">
-                Akıllı Okuyucu • Kaldığın Yerden
+              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5">
+                <Upload className="w-3.5 h-3.5" />
+                <span>Hızlı Kitap &amp; PDF Dönüştürücü</span>
               </span>
               <Link
                 href="/library"
                 className="text-xs text-muted hover:text-foreground underline"
               >
-                Tüm Kütüphane ({books.length})
+                Tüm Kitaplık ({books.length})
               </Link>
             </div>
+            <h2 className="text-lg sm:text-xl font-bold">
+              Yeni PDF / EPUB / Metin Yükle
+            </h2>
+            <p className="text-xs text-muted leading-relaxed">
+              Yüklediğiniz PDF dosyaları <code className="text-indigo-300">pdfjs-dist</code>{" "}
+              motoruyla temiz kelime dizilerine dönüştürülür ve Kademeli Hız (Auto-Ramp) okuyucuda açılır.
+            </p>
+          </div>
 
-            {activeBook && (
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-600/20 via-purple-600/10 to-surface-elevated border border-indigo-500/25 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
-                      {activeBook.category}
-                    </span>
-                    <h3 className="text-lg font-bold mt-1.5">
-                      {activeBook.title}
-                    </h3>
-                    <p className="text-xs text-muted">{activeBook.author}</p>
-                  </div>
-                  <div className="w-12 h-16 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg border border-white/15 shrink-0">
-                    <BookOpen className="w-5 h-5" />
-                  </div>
-                </div>
-
-                <p className="text-xs text-muted line-clamp-2 leading-relaxed">
-                  {activeBook.summary}
-                </p>
-
-                <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted">Kitap İlerlemesi</span>
-                    <span className="font-semibold tabular-nums">
-                      %{activeBookPct}
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-surface overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
-                      style={{ width: `${activeBookPct}%` }}
-                    />
-                  </div>
-                </div>
+          {/* Interactive Dropzone */}
+          <label
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={async (e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              const file = e.dataTransfer.files?.[0];
+              if (file) await handleUploadFile(file);
+            }}
+            className={`flex-1 min-h-[180px] cursor-pointer p-6 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center text-center gap-3 ${
+              isDragging
+                ? "bg-indigo-500/20 border-indigo-400 scale-[1.01]"
+                : "bg-surface-elevated/70 hover:bg-indigo-500/10 border-indigo-500/35 hover:border-indigo-500"
+            }`}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+              <Upload className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm font-bold text-foreground">
+                {isParsingFile
+                  ? parsingStatus || "PDF Kelime Dizisine Dönüştürülüyor..."
+                  : "PDF, EPUB, TXT veya MD Dosyasını Sürükleyin / Seçin"}
               </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Link
-              href={`/library?book=${activeBook?.id || ""}&mode=pacer`}
-              className="py-3 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all"
-            >
-              <Eye className="w-4 h-4" />
-              <span>Magic Pacer ile Oku</span>
-            </Link>
-            <Link
-              href={`/library?book=${activeBook?.id || ""}&mode=rsvp`}
-              className="py-3 px-4 rounded-2xl bg-surface-elevated hover:bg-indigo-500/10 border border-border hover:border-indigo-500/40 text-foreground text-xs font-bold flex items-center justify-center gap-2 transition-all"
-            >
-              <Zap className="w-4 h-4 text-rose-500" />
-              <span>RSVP Modunda Oku</span>
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Analytics Charts Section (Recharts) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* WPM Progression Chart */}
-        <div className="lg:col-span-7 p-6 rounded-3xl bg-surface border border-border space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-base">
-                Görsel Algı Hızı (WPM) ve Etkili Hız İvmesi
-              </h3>
-              <p className="text-xs text-muted">
-                Son yapılan optik egzersiz ve seviye testlerindeki hız gelişimi
+              <p className="text-[11px] text-muted">
+                Sayfa numaraları ve satır sonu tirelemeleri otomatik temizlenir
               </p>
             </div>
-            <span className="text-xs px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 font-semibold">
-              Elit Hedef: 600 WPM
+            <div className="flex items-center gap-2 text-[10px] font-bold">
+              <span className="px-2.5 py-0.5 rounded-md bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                PDF
+              </span>
+              <span className="px-2.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                EPUB
+              </span>
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                TXT / MD
+              </span>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.epub,.txt,.md,.markdown,application/pdf,application/epub+zip,text/plain,text/markdown"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (file) await handleUploadFile(file);
+              }}
+              className="hidden"
+            />
+          </label>
+
+          {/* 1-Click Sample PDF Test Action */}
+          <div className="pt-1 flex items-center justify-between gap-2">
+            <span className="text-[11px] text-muted">
+              Hızlı deneme için örnek kitap:
             </span>
-          </div>
-
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={chartData}
-                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={isParsingFile}
+                onClick={async () => {
+                  const res = await fetch("/ornek-hizli-okuma-kitabi.pdf");
+                  const blob = await res.blob();
+                  const samplePdf = new File(
+                    [blob],
+                    "ornek-hizli-okuma-kitabi.pdf",
+                    { type: "application/pdf" }
+                  );
+                  await handleUploadFile(samplePdf);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 text-xs font-semibold transition-all flex items-center gap-1.5"
               >
-                <defs>
-                  <linearGradient id="wpmGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.45} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
-                  </linearGradient>
-                  <linearGradient id="effGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--border-color)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="name"
-                  stroke="var(--text-muted)"
-                  fontSize={12}
-                  tickLine={false}
-                />
-                <YAxis
-                  stroke="var(--text-muted)"
-                  fontSize={12}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--bg-surface)",
-                    borderColor: "var(--border-color)",
-                    borderRadius: "12px",
-                    fontSize: "12px",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="wpm"
-                  name="Ham Hız (WPM)"
-                  stroke="#6366f1"
-                  strokeWidth={2.5}
-                  fillOpacity={1}
-                  fill="url(#wpmGrad)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="etkiliWpm"
-                  name="Net Etkili Hız (WPM)"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#effGrad)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Comprehension & Accuracy Bar Chart */}
-        <div className="lg:col-span-5 p-6 rounded-3xl bg-surface border border-border space-y-4">
-          <div>
-            <h3 className="font-bold text-base">
-              Anlama ve Odak Doğruluk Oranı (%)
-            </h3>
-            <p className="text-xs text-muted">
-              Hız artarken kavrama kalitesinin korunumu
-            </p>
+                <FileText className="w-3.5 h-3.5" />
+                <span>Örnek PDF Yükle &amp; Aç</span>
+              </button>
+            </div>
           </div>
 
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="var(--border-color)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="name"
-                  stroke="var(--text-muted)"
-                  fontSize={12}
-                  tickLine={false}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  stroke="var(--text-muted)"
-                  fontSize={12}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--bg-surface)",
-                    borderColor: "var(--border-color)",
-                    borderRadius: "12px",
-                    fontSize: "12px",
-                  }}
-                />
-                <Bar
-                  dataKey="anlama"
-                  name="Anlama / Doğruluk (%)"
-                  fill="#10b981"
-                  radius={[6, 6, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {uploadError && (
+            <p className="text-xs text-rose-400 font-medium">{uploadError}</p>
+          )}
         </div>
       </div>
 
-      {/* Recent Exercise Logs Table */}
-      <div className="p-6 rounded-3xl bg-surface border border-border space-y-4">
-        <div className="flex items-center justify-between">
+      {/* =====================================================================
+          ROW 2: "GÜNLÜK OKUMA RUTİNİ & HIZ EVRİMİ" PANEL
+      ===================================================================== */}
+      <div className="p-6 sm:p-7 rounded-3xl bg-surface border border-border space-y-6 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/70 pb-4">
           <div>
-            <h3 className="font-bold text-base">
-              Son Optik Antrenman ve Test Kayıtları
-            </h3>
-            <p className="text-xs text-muted">
-              Tamamlanan tüm egzersizler yerel ve bulut veritabanına kaydedilir
-            </p>
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Günlük Okuma Rutini &amp; Hız Evrimi</span>
+            </div>
+            <h2 className="text-xl font-extrabold">
+              Bugünkü Okuma Hedefin ve 7 Günlük WPM İvmesi
+            </h2>
           </div>
-          <button
-            onClick={resetDemoData}
-            className="text-xs text-muted hover:text-foreground flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-elevated border border-border transition-colors"
-            title="Demo verilerini başlangıç durumuna sıfırla"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Demo Verisini Sıfırla</span>
-          </button>
+
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-bold">
+              <Flame className="w-4 h-4 fill-amber-400" />
+              <span>{user.streak_days} Günlük Okuma Serisi</span>
+            </span>
+            <button
+              onClick={resetDemoData}
+              className="px-3 py-1.5 rounded-xl bg-surface-elevated border border-border text-xs text-muted hover:text-foreground flex items-center gap-1 transition-colors"
+              title="Verileri sıfırla"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Sıfırla</span>
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-muted">
-                <th className="py-2.5 px-3 font-medium">Modül / Egzersiz</th>
-                <th className="py-2.5 px-3 font-medium">Ulaşılan Hız</th>
-                <th className="py-2.5 px-3 font-medium">Anlama / Doğruluk</th>
-                <th className="py-2.5 px-3 font-medium">Süre</th>
-                <th className="py-2.5 px-3 font-medium">Gün</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60 tabular-nums">
-              {exerciseLogs
-                .slice()
-                .reverse()
-                .slice(0, 6)
-                .map((log) => (
-                  <tr key={log.id} className="hover:bg-surface-elevated/40">
-                    <td className="py-3 px-3 font-medium">
-                      {EXERCISE_LABELS[log.exercise_type] || log.exercise_type}
-                    </td>
-                    <td className="py-3 px-3 font-bold text-indigo-400">
-                      {log.achieved_wpm} WPM
-                    </td>
-                    <td className="py-3 px-3">
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-xs font-semibold">
-                        %{log.accuracy_score}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-muted">
-                      {log.duration_seconds} sn
-                    </td>
-                    <td className="py-3 px-3 text-muted text-xs">
-                      {log.label}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          {/* LEFT (5 COLS): DAILY READING TARGETS (MINUTES & WORDS) */}
+          <div className="lg:col-span-5 space-y-4">
+            {/* Goal Card 1: Daily Minutes Read */}
+            <div className="p-5 rounded-2xl bg-surface-elevated/70 border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-indigo-400" />
+                  <span>Günlük Okuma Süresi Hedefi</span>
+                </span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400">
+                  %{minutesPct}
+                </span>
+              </div>
+
+              <div className="flex items-baseline justify-between">
+                <div className="text-2xl font-extrabold tabular-nums">
+                  Bugün {dailyReadingMinutes}{" "}
+                  <span className="text-sm font-semibold text-muted">
+                    / {dailyReadingGoalMinutes} dk okundu
+                  </span>
+                </div>
+              </div>
+
+              <div className="h-2.5 w-full rounded-full bg-surface overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-500"
+                  style={{ width: `${minutesPct}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Goal Card 2: Daily Words Read */}
+            <div className="p-5 rounded-2xl bg-surface-elevated/70 border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-muted flex items-center gap-1.5">
+                  <Target className="w-4 h-4 text-emerald-400" />
+                  <span>Günlük Kelime Hedefi</span>
+                </span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400">
+                  %{wordsPct}
+                </span>
+              </div>
+
+              <div className="flex items-baseline justify-between">
+                <div className="text-2xl font-extrabold tabular-nums">
+                  {dailyWordsRead.toLocaleString("tr-TR")}{" "}
+                  <span className="text-sm font-semibold text-muted">
+                    / {dailyWordsGoal.toLocaleString("tr-TR")} kelime
+                  </span>
+                </div>
+              </div>
+
+              <div className="h-2.5 w-full rounded-full bg-surface overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-500"
+                  style={{ width: `${wordsPct}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Supporting Tools Quick Bar */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <Link
+                href="/drills"
+                className="p-3.5 rounded-2xl bg-surface-elevated hover:bg-indigo-500/10 border border-border hover:border-indigo-500/40 flex items-center justify-between transition-all"
+              >
+                <div>
+                  <div className="text-xs font-bold">Göz Isınma (Drills)</div>
+                  <div className="text-[11px] text-muted">2 dk Okuma Öncesi</div>
+                </div>
+                <Eye className="w-4 h-4 text-indigo-400" />
+              </Link>
+
+              <Link
+                href="/speed-test"
+                className="p-3.5 rounded-2xl bg-surface-elevated hover:bg-emerald-500/10 border border-border hover:border-emerald-500/40 flex items-center justify-between transition-all"
+              >
+                <div>
+                  <div className="text-xs font-bold">Kalibrasyon &amp; Analiz</div>
+                  <div className="text-[11px] text-muted">
+                    WPM: {user.current_wpm} • %{user.comprehension_rate}
+                  </div>
+                </div>
+                <Gauge className="w-4 h-4 text-emerald-400" />
+              </Link>
+            </div>
+          </div>
+
+          {/* RIGHT (7 COLS): 7-DAY PROGRESSIVE WPM LINE CHART */}
+          <div className="lg:col-span-7 p-5 rounded-2xl bg-surface-elevated/50 border border-border space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-bold text-base">
+                  Hız İvmesi Grafiği (Son 7 Günlük WPM Artışı)
+                </h3>
+                <p className="text-xs text-muted">
+                  Kitap okurken Kademeli İvme (Auto-Ramp) ile ulaşılan ortalama WPM gelişimi
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-extrabold tabular-nums">
+                {wpmGain7Days >= 0 ? `+${wpmGain7Days}` : wpmGain7Days} WPM (7 Gün)
+              </span>
+            </div>
+
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={last7DaysWpmData}
+                  margin={{ top: 10, right: 16, left: -16, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke="var(--border-color)"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="day"
+                    stroke="var(--text-muted)"
+                    fontSize={12}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    stroke="var(--text-muted)"
+                    fontSize={12}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "var(--bg-surface)",
+                      borderColor: "var(--border-color)",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="wpm"
+                    name="Okuma Hızı (WPM)"
+                    stroke="#6366f1"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: "#6366f1", strokeWidth: 2, stroke: "#fff" }}
+                    activeDot={{ r: 6, fill: "#f43f5e" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="etkiliWpm"
+                    name="Net Etkili Hız (E-WPM)"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    strokeDasharray="4 4"
+                    dot={{ r: 3, fill: "#10b981" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted pt-1 border-t border-border/60">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>
+                  Başlangıç: <strong className="text-foreground">{user.baseline_wpm} WPM</strong> &rarr; Güncel:{" "}
+                  <strong className="text-indigo-400">{user.current_wpm} WPM</strong>
+                </span>
+              </span>
+              <span>
+                Okuduğunu Anlama Ortalaması:{" "}
+                <strong className="text-emerald-400">%{user.comprehension_rate}</strong>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

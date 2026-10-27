@@ -20,10 +20,10 @@ type DrillTab = "rsvp" | "pacer" | "schulte";
 
 function DrillsContent() {
   const searchParams = useSearchParams();
-  const initialTab = (searchParams.get("tab") as DrillTab) || "rsvp";
+  const initialTab = (searchParams.get("tab") as DrillTab) || "schulte";
 
   const [activeTab, setActiveTab] = useState<DrillTab>(
-    ["rsvp", "pacer", "schulte"].includes(initialTab) ? initialTab : "rsvp"
+    ["rsvp", "pacer", "schulte"].includes(initialTab) ? initialTab : "schulte"
   );
   const [selectedTextId, setSelectedTextId] = useState<string>(
     DRILL_SAMPLE_TEXTS[0].id
@@ -70,11 +70,11 @@ function DrillsContent() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Göz ve Odak Egzersiz Motoru
+            Göz Isınma (Drills) • Okuma Öncesi 2dk Isınma
           </h1>
           <p className="text-sm text-muted mt-1">
-            İç seslendirmeyi kırın, sakkadik ritmi sabitleyin ve çevresel görüş
-            alanınızı genişletin.
+            Kitap okumaya başlamadan önce göz kaslarınızı ısıtın, çevresel görüş
+            alanınızı genişletin ve iç seslendirmeyi kırın.
           </p>
         </div>
 

@@ -11,6 +11,7 @@ import {
   Layers,
   CheckCircle2,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import {
   getORPParts,
@@ -23,7 +24,15 @@ interface RsvpEngineProps {
   initialWordIndex?: number;
   initialWpm?: number;
   fontClass?: string;
+  autoRampEnabled?: boolean;
+  onToggleAutoRamp?: () => void;
   onWordIndexChange?: (index: number, wpm: number) => void;
+  onSessionSave?: (stats: {
+    wordIndex: number;
+    wordsRead: number;
+    durationSeconds: number;
+    finalWpm: number;
+  }) => void;
   onFinishSession?: (stats: {
     wpm: number;
     durationSeconds: number;
@@ -37,7 +46,10 @@ export function RsvpEngine({
   initialWordIndex = 0,
   initialWpm = 350,
   fontClass = "font-sans",
+  autoRampEnabled = false,
+  onToggleAutoRamp,
   onWordIndexChange,
+  onSessionSave,
   onFinishSession,
   compactHeader = false,
 }: RsvpEngineProps) {
@@ -52,14 +64,81 @@ export function RsvpEngine({
   const [isPlaying, setIsPlaying] = useState(false);
   const [punctuationPause, setPunctuationPause] = useState(true);
   const [completedBanner, setCompletedBanner] = useState(false);
+  const [rampNotification, setRampNotification] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
+  const [lastSavedToast, setLastSavedToast] = useState<string | null>(null);
 
   const sessionStartRef = useRef<number | null>(null);
   const accumulatedSecondsRef = useRef<number>(0);
   const wordsReadRef = useRef<number>(0);
+  const unsavedWordsRef = useRef<number>(0);
+  const unsavedSecondsRef = useRef<number>(0);
+  const wordsSinceRampRef = useRef<number>(0);
+  const secondsSinceRampRef = useRef<number>(0);
+  const latestStateRef = useRef({
+    currentIndex,
+    wpm,
+    isPlaying,
+  });
+
+  useEffect(() => {
+    latestStateRef.current = { currentIndex, wpm, isPlaying };
+  }, [currentIndex, wpm, isPlaying]);
+
+  const flushSessionSave = (reason: "pause" | "unmount") => {
+    let activeElapsed = 0;
+    if (sessionStartRef.current) {
+      activeElapsed = (Date.now() - sessionStartRef.current) / 1000;
+      accumulatedSecondsRef.current += activeElapsed;
+      unsavedSecondsRef.current += activeElapsed;
+      sessionStartRef.current = null;
+    }
+    const wordsDelta = unsavedWordsRef.current;
+    const secDelta = Math.round(unsavedSecondsRef.current);
+
+    if (wordsDelta > 0 || secDelta >= 2) {
+      onSessionSave?.({
+        wordIndex: latestStateRef.current.currentIndex,
+        wordsRead: wordsDelta,
+        durationSeconds: Math.max(1, secDelta),
+        finalWpm: latestStateRef.current.wpm,
+      });
+      if (reason === "pause") {
+        setLastSavedToast(
+          `Kaydedildi: Kelime #${latestStateRef.current.currentIndex + 1} • +${wordsDelta} kelime • ${latestStateRef.current.wpm} WPM`
+        );
+      }
+      unsavedWordsRef.current = 0;
+      unsavedSecondsRef.current = 0;
+    }
+  };
+
+  // Save automatically on unmount if user closes reader while reading
+  useEffect(() => {
+    return () => {
+      flushSessionSave("unmount");
+    };
+  }, []);
+
+  // Clear ramp notification after 4.5s
+  useEffect(() => {
+    if (!rampNotification) return;
+    const t = setTimeout(() => setRampNotification(null), 4500);
+    return () => clearTimeout(t);
+  }, [rampNotification]);
+
+  // Clear saved toast after 3.5s
+  useEffect(() => {
+    if (!lastSavedToast) return;
+    const t = setTimeout(() => setLastSavedToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [lastSavedToast]);
 
   // Sync external initialWpm when updated from URL or parent
   useEffect(() => {
-    if (initialWpm && initialWpm >= 100 && initialWpm <= 1000) {
+    if (initialWpm && initialWpm >= 100 && initialWpm <= 1000 && !isPlaying) {
       setWpm(initialWpm);
     }
   }, [initialWpm]);
@@ -94,14 +173,10 @@ export function RsvpEngine({
   const currentChunkText = currentChunkWords.join(" ");
   const orp = useMemo(() => getORPParts(currentChunkText), [currentChunkText]);
 
-  // Timer loop for RSVP progression
+  // Timer loop for RSVP progression + Auto-Ramp (+10 WPM per 400 words or 120 seconds)
   useEffect(() => {
     if (!isPlaying || totalWords === 0) {
-      if (sessionStartRef.current) {
-        accumulatedSecondsRef.current +=
-          (Date.now() - sessionStartRef.current) / 1000;
-        sessionStartRef.current = null;
-      }
+      flushSessionSave("pause");
       return;
     }
 
@@ -117,6 +192,25 @@ export function RsvpEngine({
 
     const timer = setTimeout(() => {
       wordsReadRef.current += chunkSize;
+      unsavedWordsRef.current += chunkSize;
+      wordsSinceRampRef.current += chunkSize;
+      secondsSinceRampRef.current += delay / 1000;
+
+      // Auto-Ramp check: every 400 words or 120 seconds (2 minutes)
+      if (
+        autoRampEnabled &&
+        (wordsSinceRampRef.current >= 400 || secondsSinceRampRef.current >= 120)
+      ) {
+        wordsSinceRampRef.current = 0;
+        secondsSinceRampRef.current = 0;
+        setWpm((prevWpm) => {
+          if (prevWpm >= 1000) return prevWpm;
+          const nextWpm = Math.min(1000, prevWpm + 10);
+          setRampNotification({ from: prevWpm, to: nextWpm });
+          return nextWpm;
+        });
+      }
+
       setCurrentIndex((prev) => {
         const next = prev + chunkSize;
         if (next >= totalWords) {
@@ -150,6 +244,7 @@ export function RsvpEngine({
     totalWords,
     currentChunkText,
     punctuationPause,
+    autoRampEnabled,
     onFinishSession,
   ]);
 
@@ -294,13 +389,34 @@ export function RsvpEngine({
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(244,63,94,0.07),rgba(99,102,241,0.04)_45%,transparent_70%)]" />
 
           {/* Top HUD Telemetry Bar */}
-          <div className="absolute top-3 inset-x-6 flex items-center justify-between text-[11px] text-muted font-medium tabular-nums">
-            <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border text-indigo-400 font-semibold">
-              OCULA FOVEA LOCK • {wpm} WPM
-            </span>
-            <span>
-              GRUP: <strong className="text-foreground">{chunkSize} KELİME</strong>
-            </span>
+          <div className="absolute top-3 inset-x-6 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted font-medium tabular-nums">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-surface-elevated border border-border text-indigo-400 font-semibold">
+                OCULA FOVEA LOCK • {wpm} WPM
+              </span>
+              {autoRampEnabled && (
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-semibold flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" />
+                  <span>Auto-Ramp Aktif (+10 WPM)</span>
+                </span>
+              )}
+              {rampNotification && (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold animate-pulse">
+                  ⚡ Hız İvmesi: {rampNotification.from} &rarr;{" "}
+                  {rampNotification.to} WPM
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {lastSavedToast && (
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-semibold">
+                  {lastSavedToast}
+                </span>
+              )}
+              <span>
+                GRUP: <strong className="text-foreground">{chunkSize} KELİME</strong>
+              </span>
+            </div>
           </div>
 
           {/* Top Horizontal Optical Reticle Bar with Tick Marks */}

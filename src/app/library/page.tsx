@@ -12,11 +12,13 @@ import {
   Bookmark,
   Plus,
   Trash2,
-  Type,
   Clock,
-  CheckCircle2,
   Sparkles,
   StickyNote,
+  TrendingUp,
+  Play,
+  Pause,
+  Gauge,
 } from "lucide-react";
 import { useSupereadStore } from "@/store/useSupereadStore";
 import { Book, FontFamily, ReadingMode } from "@/types";
@@ -25,6 +27,7 @@ import { tokenizeParagraphs } from "@/lib/textUtils";
 import { RsvpEngine } from "@/components/drills/RsvpEngine";
 import { MagicPacerEngine } from "@/components/drills/MagicPacerEngine";
 import { BookComprehensionQuiz } from "@/components/BookComprehensionQuizModal";
+import { getSupabaseClient, pushStateToSupabase } from "@/lib/supabase";
 
 const FONT_CLASS_MAP: Record<FontFamily, string> = {
   sans: "font-sans",
@@ -40,14 +43,18 @@ function LibraryAndReaderContent() {
     readingProgress,
     bookNotes,
     readerPrefs,
+    supabaseUrl,
+    supabaseAnonKey,
     updateReaderPrefs,
     updateReadingProgress,
+    setLastActiveBookId,
     addBook,
     deleteCustomBook,
     addBookNote,
     deleteBookNote,
     markDailyTaskByType,
     recordExercise,
+    recordReadingSession,
   } = useSupereadStore();
 
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
@@ -64,6 +71,18 @@ function LibraryAndReaderContent() {
   const [newNoteText, setNewNoteText] = useState<string>("");
   const [selectedQuote, setSelectedQuote] = useState<string>("");
 
+  // Free Reading ("Serbest Okuma - Doğal WPM Ölçer") live timer & Auto-Ramp state
+  const [isFreeReadingActive, setIsFreeReadingActive] = useState<boolean>(true);
+  const [freeReadingSeconds, setFreeReadingSeconds] = useState<number>(0);
+  const [freeStartWordIndex, setFreeStartWordIndex] = useState<number>(0);
+  const [headerRampBanner, setHeaderRampBanner] = useState<{
+    from: number;
+    to: number;
+  } | null>(null);
+  const [sessionSavedBadge, setSessionSavedBadge] = useState<string | null>(
+    null
+  );
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Sync URL params (?book=...&mode=...)
@@ -72,6 +91,7 @@ function LibraryAndReaderContent() {
     const modeParam = searchParams.get("mode") as ReadingMode | null;
     if (bookParam && books.some((b) => b.id === bookParam)) {
       setActiveBookId(bookParam);
+      setLastActiveBookId(bookParam);
       if (modeParam && ["standard", "rsvp", "pacer"].includes(modeParam)) {
         setReadingMode(modeParam);
       } else {
@@ -110,6 +130,100 @@ function LibraryAndReaderContent() {
   const currentWpm =
     currentProgress?.preferred_wpm ?? user.current_wpm ?? readerPrefs.defaultWpm;
 
+  // Reset free reading baseline when book opens
+  useEffect(() => {
+    if (activeBook) {
+      setFreeStartWordIndex(
+        readingProgress[activeBook.id]?.current_word_index ?? 0
+      );
+      setFreeReadingSeconds(0);
+      setIsFreeReadingActive(true);
+    }
+  }, [activeBookId]);
+
+  // Clear ramp banner after 4.5s
+  useEffect(() => {
+    if (!headerRampBanner) return;
+    const t = setTimeout(() => setHeaderRampBanner(null), 4500);
+    return () => clearTimeout(t);
+  }, [headerRampBanner]);
+
+  // Clear saved badge after 4s
+  useEffect(() => {
+    if (!sessionSavedBadge) return;
+    const t = setTimeout(() => setSessionSavedBadge(null), 4000);
+    return () => clearTimeout(t);
+  }, [sessionSavedBadge]);
+
+  // Free Reading ("Serbest Okuma - Doğal WPM Ölçer") timer & 2-minute Auto-Ramp
+  useEffect(() => {
+    if (!activeBook || readingMode !== "standard" || !isFreeReadingActive) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setFreeReadingSeconds((prev) => {
+        const nextSec = prev + 1;
+        if (
+          readerPrefs.autoRampEnabled &&
+          nextSec > 0 &&
+          nextSec % 120 === 0
+        ) {
+          const fromWpm = currentWpm;
+          const toWpm = Math.min(1000, fromWpm + 10);
+          setHeaderRampBanner({ from: fromWpm, to: toWpm });
+          updateReadingProgress(
+            activeBook.id,
+            currentWordIndex,
+            "standard",
+            toWpm
+          );
+        }
+        return nextSec;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [
+    activeBook,
+    readingMode,
+    isFreeReadingActive,
+    readerPrefs.autoRampEnabled,
+    currentWpm,
+    currentWordIndex,
+  ]);
+
+  // Persist session to Zustand store (LocalStorage) + Supabase Cloud if configured
+  const handlePersistReadingSession = (params: {
+    wordIndex: number;
+    wordsRead: number;
+    durationSeconds: number;
+    finalWpm: number;
+    mode: ReadingMode;
+  }) => {
+    if (!activeBook) return;
+    recordReadingSession({
+      bookId: activeBook.id,
+      wordIndex: params.wordIndex,
+      wordsRead: params.wordsRead,
+      durationSeconds: params.durationSeconds,
+      finalWpm: params.finalWpm,
+      mode: params.mode,
+    });
+    setSessionSavedBadge(
+      `Otomatik Kaydedildi: #${params.wordIndex + 1}. kelime • ${params.finalWpm} WPM`
+    );
+
+    const client = getSupabaseClient(supabaseUrl, supabaseAnonKey);
+    if (client) {
+      const latest = useSupereadStore.getState();
+      pushStateToSupabase(client, {
+        user: latest.user,
+        books: latest.books,
+        exerciseLogs: latest.exerciseLogs,
+        readingProgress: latest.readingProgress,
+      }).catch(() => {});
+    }
+  };
+
   const activeBookNotes = useMemo(
     () =>
       activeBook
@@ -120,10 +234,38 @@ function LibraryAndReaderContent() {
 
   const handleOpenBook = (bookId: string, mode?: ReadingMode) => {
     const saved = readingProgress[bookId];
-    const targetMode = mode || saved?.reading_mode || "standard";
+    const targetMode = mode || saved?.reading_mode || "pacer";
     setActiveBookId(bookId);
+    setLastActiveBookId(bookId);
     setReadingMode(targetMode);
     markDailyTaskByType("book_reading");
+  };
+
+  const handleCloseBook = () => {
+    if (activeBook && readingMode === "standard" && freeReadingSeconds >= 3) {
+      const progressedWords = Math.max(
+        0,
+        currentWordIndex - freeStartWordIndex
+      );
+      const naturalWpm =
+        progressedWords >= 15
+          ? Math.min(
+              950,
+              Math.max(
+                120,
+                Math.round((progressedWords / freeReadingSeconds) * 60)
+              )
+            )
+          : currentWpm;
+      handlePersistReadingSession({
+        wordIndex: currentWordIndex,
+        wordsRead: progressedWords > 0 ? progressedWords : Math.round((currentWpm * freeReadingSeconds) / 60),
+        durationSeconds: freeReadingSeconds,
+        finalWpm: naturalWpm,
+        mode: "standard",
+      });
+    }
+    setActiveBookId(null);
   };
 
   // Handle PDF / EPUB / TXT / MD File Processing
@@ -148,7 +290,7 @@ function LibraryAndReaderContent() {
           parsed.format === "PDF"
             ? "from-rose-600 via-orange-600 to-amber-700"
             : "from-fuchsia-600 via-purple-600 to-indigo-700",
-        summary: `${file.name} (${parsed.format}) dosyasından dönüştürüldü (${pageInfo}${parsed.paragraphs.length} paragraf, ${parsed.wordCount} kelime). Standart, Magic Pacer ve RSVP modlarına hazır.`,
+        summary: `${file.name} (${parsed.format}) dosyasından dönüştürüldü (${pageInfo}${parsed.paragraphs.length} paragraf, ${parsed.wordCount} kelime). Serbest Okuma, Pacer ve RSVP modlarına hazır.`,
         content: parsed.paragraphs,
         is_custom: true,
       };
@@ -208,6 +350,14 @@ function LibraryAndReaderContent() {
     const totalWords = Math.max(1, tokenizedActiveBook.words.length);
     const pct = Math.min(100, Math.round((currentWordIndex / totalWords) * 100));
     const fontClass = FONT_CLASS_MAP[readerPrefs.fontFamily];
+    const freeWordsDelta = Math.max(0, currentWordIndex - freeStartWordIndex);
+    const liveNaturalWpm =
+      freeWordsDelta >= 10 && freeReadingSeconds >= 4
+        ? Math.min(
+            950,
+            Math.max(110, Math.round((freeWordsDelta / freeReadingSeconds) * 60))
+          )
+        : currentWpm;
 
     return (
       <div className="space-y-5">
@@ -216,9 +366,9 @@ function LibraryAndReaderContent() {
           {/* Left: Back button & Book Title */}
           <div className="flex items-center gap-3 min-w-0">
             <button
-              onClick={() => setActiveBookId(null)}
+              onClick={handleCloseBook}
               className="p-2.5 rounded-xl bg-surface-elevated border border-border text-muted hover:text-foreground transition-colors shrink-0"
-              title="Kütüphaneye Dön"
+              title="Kaydet ve Kütüphaneye Dön"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -232,14 +382,15 @@ function LibraryAndReaderContent() {
                 </span>
               </div>
               <p className="text-xs text-muted truncate">
-                {activeBook.author} • {activeBook.word_count} kelime • Kelime #
-                {currentWordIndex + 1}
+                {activeBook.author} • {currentWordIndex.toLocaleString("tr-TR")} /{" "}
+                {activeBook.word_count.toLocaleString("tr-TR")} kelime •{" "}
+                <strong className="text-indigo-400">{currentWpm} WPM</strong>
               </p>
             </div>
           </div>
 
-          {/* Center: 3 Reading Mode Switcher (Standard / Magic Pacer / RSVP) */}
-          <div className="flex rounded-xl bg-surface-elevated p-1 border border-border">
+          {/* Center: 3 Reading Mode Switcher ("Serbest Okuma (Doğal WPM Ölçer)", "Pacer (Odak Bloğu)", "RSVP") */}
+          <div className="flex flex-wrap rounded-xl bg-surface-elevated p-1 border border-border">
             <button
               onClick={() => {
                 setReadingMode("standard");
@@ -250,14 +401,14 @@ function LibraryAndReaderContent() {
                   currentWpm
                 );
               }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 readingMode === "standard"
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-muted hover:text-foreground"
               }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>Standart</span>
+              <span>Serbest Okuma (Doğal WPM Ölçer)</span>
             </button>
 
             <button
@@ -270,14 +421,14 @@ function LibraryAndReaderContent() {
                   currentWpm
                 );
               }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 readingMode === "pacer"
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-muted hover:text-foreground"
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Magic Pacer</span>
+              <span>Pacer (Odak Bloğu)</span>
             </button>
 
             <button
@@ -290,21 +441,48 @@ function LibraryAndReaderContent() {
                   currentWpm
                 );
               }}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                 readingMode === "rsvp"
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-muted hover:text-foreground"
               }`}
             >
               <Zap className="w-3.5 h-3.5" />
-              <span>RSVP Odak</span>
+              <span>RSVP</span>
             </button>
           </div>
 
-          {/* Right: Typography Controls & Notes Toggle */}
-          <div className="flex items-center gap-2">
+          {/* Right: Kademeli İvme (Auto-Ramp) Toggle + Typography + Notes */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Kademeli İvme (Auto-Ramp) Toggle Button */}
+            <button
+              onClick={() =>
+                updateReaderPrefs({
+                  autoRampEnabled: !readerPrefs.autoRampEnabled,
+                })
+              }
+              className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all ${
+                readerPrefs.autoRampEnabled
+                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400 shadow-sm shadow-emerald-500/10"
+                  : "bg-surface-elevated border-border text-muted hover:text-foreground"
+              }`}
+              title="Aktifken her 2 dakikada veya 400 kelimede bir okuma hızı otomatik olarak +10 WPM artar"
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Kademeli İvme (Auto-Ramp)</span>
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] ${
+                  readerPrefs.autoRampEnabled
+                    ? "bg-emerald-500 text-white"
+                    : "bg-surface text-muted"
+                }`}
+              >
+                {readerPrefs.autoRampEnabled ? "+10 WPM AÇIK" : "KAPALI"}
+              </span>
+            </button>
+
             {/* Font Family */}
-            <div className="hidden sm:flex rounded-xl bg-surface-elevated p-1 border border-border">
+            <div className="hidden xl:flex rounded-xl bg-surface-elevated p-1 border border-border">
               {(
                 [
                   { id: "sans", label: "Sans" },
@@ -370,10 +548,30 @@ function LibraryAndReaderContent() {
           </div>
         </div>
 
+        {/* Live Auto-Ramp Notification or Session Saved Banner */}
+        {(headerRampBanner || sessionSavedBadge) && (
+          <div className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-indigo-500/15 via-emerald-500/15 to-amber-500/15 border border-indigo-500/30 flex flex-wrap items-center justify-between gap-2 text-xs">
+            {headerRampBanner && (
+              <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <span>
+                  Hız İvmesi: {headerRampBanner.from} &rarr; {headerRampBanner.to}{" "}
+                  WPM (+10 WPM Kademeli Artış Uygulandı)
+                </span>
+              </span>
+            )}
+            {sessionSavedBadge && (
+              <span className="font-semibold text-indigo-300">
+                ✓ {sessionSavedBadge}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Main Reader Layout (with collapsible Notes Sidebar) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           <div className={showNotesPanel ? "lg:col-span-8" : "lg:col-span-12"}>
-            {/* MODE A: STANDARD READER */}
+            {/* MODE A: SERBEST OKUMA (DOĞAL WPM ÖLÇER) */}
             {readingMode === "standard" && (
               <div className="rounded-3xl bg-surface border-2 border-border overflow-hidden shadow-xl">
                 <div className="h-1.5 w-full bg-surface-elevated">
@@ -383,20 +581,104 @@ function LibraryAndReaderContent() {
                   />
                 </div>
 
-                <div className="px-6 py-3 bg-surface-elevated/50 border-b border-border flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+                {/* Natural WPM Meter Control Strip */}
+                <div className="px-6 py-3.5 bg-surface-elevated/60 border-b border-border flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-bold tabular-nums">
+                      <Gauge className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Doğal WPM Ölçer: {liveNaturalWpm} WPM</span>
+                    </span>
+                    <span className="text-muted tabular-nums">
+                      Seans Süresi:{" "}
+                      <strong className="text-foreground">
+                        {Math.floor(freeReadingSeconds / 60)} dk{" "}
+                        {freeReadingSeconds % 60} sn
+                      </strong>{" "}
+                      • Okunan:{" "}
+                      <strong className="text-emerald-400">
+                        +{freeWordsDelta} kelime
+                      </strong>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        if (isFreeReadingActive) {
+                          // Pause & save free reading session
+                          setIsFreeReadingActive(false);
+                          handlePersistReadingSession({
+                            wordIndex: currentWordIndex,
+                            wordsRead:
+                              freeWordsDelta > 0
+                                ? freeWordsDelta
+                                : Math.max(
+                                    10,
+                                    Math.round(
+                                      (liveNaturalWpm * freeReadingSeconds) / 60
+                                    )
+                                  ),
+                            durationSeconds: Math.max(1, freeReadingSeconds),
+                            finalWpm: liveNaturalWpm,
+                            mode: "standard",
+                          });
+                          setFreeStartWordIndex(currentWordIndex);
+                        } else {
+                          setIsFreeReadingActive(true);
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 border transition-all ${
+                        isFreeReadingActive
+                          ? "bg-amber-500/15 border-amber-500/30 text-amber-300 hover:bg-amber-500/25"
+                          : "bg-indigo-600 border-indigo-500 text-white"
+                      }`}
+                    >
+                      {isFreeReadingActive ? (
+                        <>
+                          <Pause className="w-3.5 h-3.5" />
+                          <span>Duraklat & Kaydet</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-3.5 h-3.5" />
+                          <span>Sayacı Sürdür</span>
+                        </>
+                      )}
+                    </button>
+                    <span className="text-muted hidden sm:inline">
+                      Kayıtlı Konum:{" "}
+                      <strong className="text-foreground">
+                        #{currentWordIndex + 1}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="px-6 py-2.5 bg-indigo-500/5 border-b border-border/60 text-[11px] text-muted flex items-center justify-between">
                   <span>
-                    İpucu: Herhangi bir kelimeye tıklayarak yer iminizi o
-                    noktaya taşıyabilir ve hemen üstten{" "}
-                    <strong className="text-indigo-400">RSVP</strong> veya{" "}
-                    <strong className="text-indigo-400">Magic Pacer</strong>{" "}
-                    moduna geçebilirsiniz.
+                    İpucu: Okurken ulaştığınız kelimeye tıkladığınızda{" "}
+                    <strong className="text-foreground">Doğal WPM hızınız</strong>{" "}
+                    ve kaldığınız kelime otomatik hesaplanıp kaydedilir.
                   </span>
-                  <span>
-                    Kayıtlı Konum:{" "}
-                    <strong className="text-foreground">
-                      #{currentWordIndex + 1}
-                    </strong>
-                  </span>
+                  {readerPrefs.autoRampEnabled && (
+                    <button
+                      onClick={() => {
+                        const from = currentWpm;
+                        const to = Math.min(1000, from + 10);
+                        setHeaderRampBanner({ from, to });
+                        updateReadingProgress(
+                          activeBook.id,
+                          currentWordIndex,
+                          "standard",
+                          to
+                        );
+                      }}
+                      className="text-emerald-400 hover:underline font-semibold shrink-0 ml-2"
+                    >
+                      ⚡ +10 WPM İvme Uygula ({currentWpm} &rarr;{" "}
+                      {Math.min(1000, currentWpm + 10)})
+                    </button>
+                  )}
                 </div>
 
                 <div
@@ -416,12 +698,48 @@ function LibraryAndReaderContent() {
                             <React.Fragment key={token.globalIndex}>
                               <span
                                 onClick={() => {
-                                  updateReadingProgress(
-                                    activeBook.id,
-                                    token.globalIndex,
-                                    "standard",
-                                    currentWpm
+                                  const delta = Math.max(
+                                    0,
+                                    token.globalIndex - freeStartWordIndex
                                   );
+                                  const computedWpm =
+                                    delta >= 10 && freeReadingSeconds >= 4
+                                      ? Math.min(
+                                          950,
+                                          Math.max(
+                                            110,
+                                            Math.round(
+                                              (delta / freeReadingSeconds) * 60
+                                            )
+                                          )
+                                        )
+                                      : currentWpm;
+
+                                  // Check 400-word Auto-Ramp threshold in free reading
+                                  let nextWpm = computedWpm;
+                                  if (
+                                    readerPrefs.autoRampEnabled &&
+                                    delta >= 400
+                                  ) {
+                                    nextWpm = Math.min(1000, computedWpm + 10);
+                                    setHeaderRampBanner({
+                                      from: computedWpm,
+                                      to: nextWpm,
+                                    });
+                                  }
+
+                                  handlePersistReadingSession({
+                                    wordIndex: token.globalIndex,
+                                    wordsRead: delta,
+                                    durationSeconds: Math.max(
+                                      1,
+                                      freeReadingSeconds
+                                    ),
+                                    finalWpm: nextWpm,
+                                    mode: "standard",
+                                  });
+                                  setFreeStartWordIndex(token.globalIndex);
+                                  setFreeReadingSeconds(0);
                                 }}
                                 className={`cursor-pointer rounded px-0.5 transition-colors ${
                                   isBookmarkedWord
@@ -441,7 +759,7 @@ function LibraryAndReaderContent() {
               </div>
             )}
 
-            {/* MODE B: MAGIC PACER READER */}
+            {/* MODE B: PACER (ODAK BLOĞU) READER */}
             {readingMode === "pacer" && (
               <MagicPacerEngine
                 paragraphs={activeBook.content}
@@ -450,15 +768,40 @@ function LibraryAndReaderContent() {
                 fontClass={fontClass}
                 fontSize={readerPrefs.fontSize}
                 lineHeight={readerPrefs.lineHeight}
+                autoRampEnabled={readerPrefs.autoRampEnabled}
+                onToggleAutoRamp={() =>
+                  updateReaderPrefs({
+                    autoRampEnabled: !readerPrefs.autoRampEnabled,
+                  })
+                }
                 onWordIndexChange={(idx, wpmVal) => {
                   updateReadingProgress(activeBook.id, idx, "pacer", wpmVal);
                 }}
-                onFinishSession={({ wpm: finishedWpm, durationSeconds }) => {
-                  recordExercise({
-                    exercise_type: "pacer",
-                    achieved_wpm: finishedWpm,
-                    accuracy_score: 90,
-                    duration_seconds: durationSeconds,
+                onSessionSave={({
+                  wordIndex,
+                  wordsRead,
+                  durationSeconds,
+                  finalWpm,
+                }) => {
+                  handlePersistReadingSession({
+                    wordIndex,
+                    wordsRead,
+                    durationSeconds,
+                    finalWpm,
+                    mode: "pacer",
+                  });
+                }}
+                onFinishSession={({
+                  wpm: finishedWpm,
+                  durationSeconds,
+                  wordsRead,
+                }) => {
+                  handlePersistReadingSession({
+                    wordIndex: totalWords - 1,
+                    wordsRead,
+                    durationSeconds,
+                    finalWpm: finishedWpm,
+                    mode: "pacer",
                   });
                 }}
               />
@@ -471,15 +814,40 @@ function LibraryAndReaderContent() {
                 initialWordIndex={currentWordIndex}
                 initialWpm={currentWpm}
                 fontClass={fontClass}
+                autoRampEnabled={readerPrefs.autoRampEnabled}
+                onToggleAutoRamp={() =>
+                  updateReaderPrefs({
+                    autoRampEnabled: !readerPrefs.autoRampEnabled,
+                  })
+                }
                 onWordIndexChange={(idx, wpmVal) => {
                   updateReadingProgress(activeBook.id, idx, "rsvp", wpmVal);
                 }}
-                onFinishSession={({ wpm: finishedWpm, durationSeconds }) => {
-                  recordExercise({
-                    exercise_type: "rsvp",
-                    achieved_wpm: finishedWpm,
-                    accuracy_score: 92,
-                    duration_seconds: durationSeconds,
+                onSessionSave={({
+                  wordIndex,
+                  wordsRead,
+                  durationSeconds,
+                  finalWpm,
+                }) => {
+                  handlePersistReadingSession({
+                    wordIndex,
+                    wordsRead,
+                    durationSeconds,
+                    finalWpm,
+                    mode: "rsvp",
+                  });
+                }}
+                onFinishSession={({
+                  wpm: finishedWpm,
+                  durationSeconds,
+                  wordsRead,
+                }) => {
+                  handlePersistReadingSession({
+                    wordIndex: totalWords - 1,
+                    wordsRead,
+                    durationSeconds,
+                    finalWpm: finishedWpm,
+                    mode: "rsvp",
                   });
                 }}
               />
@@ -581,15 +949,15 @@ function LibraryAndReaderContent() {
         <div>
           <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-400 mb-1">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Faz 2 • Egzersiz Entegreli Akıllı E-Kitap Kütüphanesi</span>
+            <span>Ocula VISION • Kitaplığım &amp; Kademeli Hız (Auto-Ramp) Okuyucu</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Smart Reader Kütüphanesi
+            Kitaplığım &amp; PDF Kütüphanesi
           </h1>
           <p className="text-sm text-muted mt-1">
             Kütüphanedeki eserleri veya kendi yüklediğiniz{" "}
             <strong className="text-foreground">PDF, EPUB, TXT, Markdown</strong>{" "}
-            kitaplarını Standart, Magic Pacer veya RSVP modlarında okuyun.
+            kitaplarını Serbest Okuma (Doğal WPM Ölçer), Pacer (Odak Bloğu) veya RSVP modlarında okuyun.
           </p>
         </div>
 
@@ -812,7 +1180,7 @@ function LibraryAndReaderContent() {
                     className="py-2.5 px-3 rounded-xl bg-surface-elevated hover:bg-indigo-500/10 border border-border hover:border-indigo-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
                   >
                     <BookOpen className="w-3.5 h-3.5 text-muted" />
-                    <span>Standart</span>
+                    <span>Serbest Okuma</span>
                   </button>
 
                   <button
@@ -820,7 +1188,7 @@ function LibraryAndReaderContent() {
                     className="py-2.5 px-3 rounded-xl bg-indigo-600/15 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Eye className="w-3.5 h-3.5" />
-                    <span>Magic Pacer</span>
+                    <span>Pacer (Odak)</span>
                   </button>
 
                   <button
@@ -828,7 +1196,7 @@ function LibraryAndReaderContent() {
                     className="py-2.5 px-3 rounded-xl bg-rose-500/15 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>RSVP Odak</span>
+                    <span>RSVP</span>
                   </button>
                 </div>
 

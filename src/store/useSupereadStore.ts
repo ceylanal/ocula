@@ -28,17 +28,23 @@ interface ReaderPreferences {
   fontSize: number; // in px (16 - 28)
   lineHeight: number; // 1.5 - 2.2
   defaultWpm: number;
+  autoRampEnabled: boolean;
 }
 
 interface SupereadState {
   theme: ThemeMode;
   user: UserProfile;
   books: Book[];
+  lastActiveBookId: string;
   exerciseLogs: ExerciseLog[];
   dailyTasks: DailyTask[];
   readingProgress: Record<string, UserReadingProgress>;
   bookNotes: BookNote[];
   readerPrefs: ReaderPreferences;
+  dailyReadingMinutes: number;
+  dailyReadingGoalMinutes: number;
+  dailyWordsRead: number;
+  dailyWordsGoal: number;
   geminiApiKey: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
@@ -46,6 +52,7 @@ interface SupereadState {
 
   // Actions
   setTheme: (theme: ThemeMode) => void;
+  setLastActiveBookId: (bookId: string) => void;
   setGeminiApiKey: (key: string) => void;
   setSupabaseConfig: (url: string, anonKey: string) => void;
   setLastSyncedAt: (iso: string) => void;
@@ -62,6 +69,14 @@ interface SupereadState {
     accuracy_score: number;
     duration_seconds: number;
     label?: string;
+  }) => void;
+  recordReadingSession: (params: {
+    bookId: string;
+    wordIndex: number;
+    wordsRead: number;
+    durationSeconds: number;
+    finalWpm: number;
+    mode: ReadingMode;
   }) => void;
   regenerateDailyPlan: () => void;
   toggleDailyTask: (taskId: string) => void;
@@ -94,8 +109,13 @@ export const useSupereadStore = create<SupereadState>()(
       theme: "dark",
       user: INITIAL_USER_PROFILE,
       books: INITIAL_BOOKS,
+      lastActiveBookId: INITIAL_BOOKS[0]?.id || "book-neuro-focus",
       exerciseLogs: INITIAL_EXERCISE_LOGS,
       dailyTasks: INITIAL_DAILY_TASKS,
+      dailyReadingMinutes: 15,
+      dailyReadingGoalMinutes: 20,
+      dailyWordsRead: 3200,
+      dailyWordsGoal: 5000,
       geminiApiKey: "",
       supabaseUrl: "",
       supabaseAnonKey: "",
@@ -105,7 +125,7 @@ export const useSupereadStore = create<SupereadState>()(
           id: "prog-1",
           user_id: "user-1",
           book_id: "book-neuro-focus",
-          current_word_index: 48,
+          current_word_index: 64,
           reading_mode: "pacer",
           preferred_wpm: 340,
           updated_at: new Date().toISOString(),
@@ -125,11 +145,14 @@ export const useSupereadStore = create<SupereadState>()(
       readerPrefs: {
         fontFamily: "sans",
         fontSize: 19,
-        lineHeight: 1.8,
+        lineHeight: 1.85,
         defaultWpm: 320,
+        autoRampEnabled: true,
       },
 
       setTheme: (theme) => set({ theme }),
+
+      setLastActiveBookId: (lastActiveBookId) => set({ lastActiveBookId }),
 
       setGeminiApiKey: (geminiApiKey) => set({ geminiApiKey }),
 
@@ -200,6 +223,70 @@ export const useSupereadStore = create<SupereadState>()(
         });
       },
 
+      recordReadingSession: ({
+        bookId,
+        wordIndex,
+        wordsRead,
+        durationSeconds,
+        finalWpm,
+        mode,
+      }) => {
+        const now = new Date();
+        const dayNames = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+        const addedMinutes = Math.max(0.5, Number((durationSeconds / 60).toFixed(1)));
+        const cleanWordsRead = Math.max(0, Math.round(wordsRead));
+        const cleanWpm = Math.round(finalWpm);
+
+        set((state) => {
+          const existingProg = state.readingProgress[bookId];
+          const updatedProgress = {
+            ...state.readingProgress,
+            [bookId]: {
+              id: existingProg?.id || `prog-${bookId}`,
+              user_id: state.user.id,
+              book_id: bookId,
+              current_word_index: Math.max(0, wordIndex),
+              reading_mode: mode,
+              preferred_wpm: cleanWpm,
+              updated_at: now.toISOString(),
+            },
+          };
+
+          const updatedUser = {
+            ...state.user,
+            current_wpm: cleanWpm > 0 ? cleanWpm : state.user.current_wpm,
+          };
+
+          const updatedLogs =
+            cleanWordsRead >= 15 || durationSeconds >= 10
+              ? [
+                  ...state.exerciseLogs,
+                  {
+                    id: `log-read-${Date.now()}`,
+                    user_id: state.user.id,
+                    exercise_type: (mode === "rsvp" ? "rsvp" : "pacer") as ExerciseType,
+                    achieved_wpm: cleanWpm,
+                    accuracy_score: state.user.comprehension_rate || 88,
+                    duration_seconds: Math.max(1, Math.round(durationSeconds)),
+                    completed_at: now.toISOString(),
+                    label: dayNames[now.getDay()],
+                  },
+                ]
+              : state.exerciseLogs;
+
+          return {
+            lastActiveBookId: bookId,
+            readingProgress: updatedProgress,
+            user: updatedUser,
+            exerciseLogs: updatedLogs,
+            dailyReadingMinutes: Number(
+              (state.dailyReadingMinutes + addedMinutes).toFixed(1)
+            ),
+            dailyWordsRead: state.dailyWordsRead + cleanWordsRead,
+          };
+        });
+      },
+
       regenerateDailyPlan: () =>
         set((state) => {
           const plan = generateAlgorithmicDailyPlan(
@@ -228,6 +315,19 @@ export const useSupereadStore = create<SupereadState>()(
       addBook: (book) =>
         set((state) => ({
           books: [book, ...state.books],
+          lastActiveBookId: book.id,
+          readingProgress: {
+            ...state.readingProgress,
+            [book.id]: {
+              id: `prog-${book.id}`,
+              user_id: state.user.id,
+              book_id: book.id,
+              current_word_index: 0,
+              reading_mode: "pacer",
+              preferred_wpm: state.user.current_wpm || 320,
+              updated_at: new Date().toISOString(),
+            },
+          },
         })),
 
       setBookQuestions: (bookId, questions) =>
@@ -238,14 +338,28 @@ export const useSupereadStore = create<SupereadState>()(
         })),
 
       deleteCustomBook: (bookId) =>
-        set((state) => ({
-          books: state.books.filter((b) => b.id !== bookId),
-        })),
+        set((state) => {
+          const remaining = state.books.filter((b) => b.id !== bookId);
+          return {
+            books: remaining,
+            lastActiveBookId:
+              state.lastActiveBookId === bookId
+                ? remaining[0]?.id || ""
+                : state.lastActiveBookId,
+          };
+        }),
 
       updateReadingProgress: (bookId, wordIndex, mode, wpm) =>
         set((state) => {
           const existing = state.readingProgress[bookId];
+          const updatedWpm =
+            wpm ?? existing?.preferred_wpm ?? state.readerPrefs.defaultWpm;
           return {
+            lastActiveBookId: bookId,
+            user:
+              wpm && wpm > 0
+                ? { ...state.user, current_wpm: Math.round(wpm) }
+                : state.user,
             readingProgress: {
               ...state.readingProgress,
               [bookId]: {
@@ -254,8 +368,7 @@ export const useSupereadStore = create<SupereadState>()(
                 book_id: bookId,
                 current_word_index: Math.max(0, wordIndex),
                 reading_mode: mode,
-                preferred_wpm:
-                  wpm ?? existing?.preferred_wpm ?? state.readerPrefs.defaultWpm,
+                preferred_wpm: updatedWpm,
                 updated_at: new Date().toISOString(),
               },
             },
@@ -286,12 +399,15 @@ export const useSupereadStore = create<SupereadState>()(
         set({
           user: INITIAL_USER_PROFILE,
           books: INITIAL_BOOKS,
+          lastActiveBookId: INITIAL_BOOKS[0]?.id || "book-neuro-focus",
           exerciseLogs: INITIAL_EXERCISE_LOGS,
           dailyTasks: INITIAL_DAILY_TASKS,
+          dailyReadingMinutes: 15,
+          dailyWordsRead: 3200,
         }),
     }),
     {
-      name: "kitup-storage-v1",
+      name: "ocula-vision-storage-v2",
       storage: createJSONStorage(() => localStorage),
     }
   )

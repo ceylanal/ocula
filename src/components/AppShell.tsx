@@ -24,26 +24,26 @@ import { CloudSyncAndShareModal } from "./CloudSyncAndShareModal";
 const NAV_ITEMS = [
   {
     href: "/",
-    label: "Komuta Merkezi",
-    sublabel: "Plan & Optik Analiz",
+    label: "Okuma Stüdyosu",
+    sublabel: "Aktif Kitap • PDF Yükle • Rutin",
     icon: LayoutDashboard,
   },
   {
-    href: "/drills",
-    label: "Göz Egzersizleri",
-    sublabel: "RSVP • Pacer • Schulte",
-    icon: Eye,
-  },
-  {
     href: "/library",
-    label: "Akıllı Kütüphane",
-    sublabel: "Smart Reader • PDF & EPUB",
+    label: "Kitaplığım & PDF",
+    sublabel: "Smart Reader • Auto-Ramp",
     icon: BookOpen,
   },
   {
+    href: "/drills",
+    label: "Göz Isınma (Drills)",
+    sublabel: "Okuma Öncesi 2dk Isınma",
+    icon: Eye,
+  },
+  {
     href: "/speed-test",
-    label: "Optik Seviye Testi",
-    sublabel: "WPM & Kavrama Ölçümü",
+    label: "Kalibrasyon & Analiz",
+    sublabel: "Seviye Testi & Detaylı Grafik",
     icon: Gauge,
   },
 ];
