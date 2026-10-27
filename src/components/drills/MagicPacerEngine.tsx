@@ -24,6 +24,7 @@ interface MagicPacerEngineProps {
   lineHeight?: number;
   autoRampEnabled?: boolean;
   zenDimmed?: boolean;
+  externalAudioPlaying?: boolean;
   onPlayingStateChange?: (isPlaying: boolean) => void;
   onToggleAutoRamp?: () => void;
   onWordIndexChange?: (index: number, wpm: number) => void;
@@ -51,6 +52,7 @@ export function MagicPacerEngine({
   lineHeight = 1.9,
   autoRampEnabled = false,
   zenDimmed = false,
+  externalAudioPlaying = false,
   onPlayingStateChange,
   onToggleAutoRamp,
   onWordIndexChange,
@@ -79,6 +81,8 @@ export function MagicPacerEngine({
 
   const activeWordElRef = useRef<HTMLSpanElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const lastScrolledLineOffsetRef = useRef<number>(-1);
+  const isExternalSyncRef = useRef<boolean>(false);
   const sessionStartRef = useRef<number | null>(null);
   const accumulatedSecondsRef = useRef<number>(0);
   const unsavedWordsRef = useRef<number>(0);
@@ -95,6 +99,13 @@ export function MagicPacerEngine({
     latestStateRef.current = { currentIndex, wpm, isPlaying };
     onPlayingStateChange?.(isPlaying);
   }, [currentIndex, wpm, isPlaying]);
+
+  // If external Audio starts playing, pause internal Pacer timer so Audio drives word position cleanly
+  useEffect(() => {
+    if (externalAudioPlaying && isPlaying) {
+      setIsPlaying(false);
+    }
+  }, [externalAudioPlaying, isPlaying]);
 
   const flushSessionSave = (reason: "pause" | "unmount") => {
     let activeElapsed = 0;
@@ -142,46 +153,61 @@ export function MagicPacerEngine({
     return () => clearTimeout(t);
   }, [lastSavedToast]);
 
-  // Sync external initialWpm when updated from URL or parent
+  // Sync external initialWpm when updated from Audio Bar or parent
   useEffect(() => {
-    if (initialWpm && initialWpm >= 100 && initialWpm <= 1000 && !isPlaying) {
+    if (initialWpm && initialWpm >= 90 && initialWpm <= 1000 && initialWpm !== wpm) {
+      isExternalSyncRef.current = true;
       setWpm(initialWpm);
     }
   }, [initialWpm]);
 
   // Reset only when the actual text/book changes
   useEffect(() => {
+    isExternalSyncRef.current = true;
     setCurrentIndex(Math.min(initialWordIndex, Math.max(0, totalWords - 1)));
     setIsPlaying(false);
     setCompleted(false);
   }, [paragraphs, totalWords]);
 
-  // Allow jumping to a bookmark/note word index when paused
+  // Follow initialWordIndex whenever Pacer's internal timer is paused (including during Audio playback!)
   useEffect(() => {
     if (!isPlaying) {
-      setCurrentIndex(Math.min(initialWordIndex, Math.max(0, totalWords - 1)));
+      const clamped = Math.min(initialWordIndex, Math.max(0, totalWords - 1));
+      if (clamped !== currentIndex) {
+        isExternalSyncRef.current = true;
+        setCurrentIndex(clamped);
+      }
     }
-  }, [initialWordIndex, totalWords]);
+  }, [initialWordIndex, totalWords, isPlaying]);
 
   useEffect(() => {
+    if (isExternalSyncRef.current) {
+      isExternalSyncRef.current = false;
+      return;
+    }
     onWordIndexChange?.(currentIndex, wpm);
   }, [currentIndex, wpm]);
 
-  // Accurate auto-scroll using getBoundingClientRect relative to scroll container
+  // Continuous line-by-line auto-scroll for both inner container and browser window
   useEffect(() => {
     if (!activeWordElRef.current || !containerRef.current) return;
     const container = containerRef.current;
     const el = activeWordElRef.current;
 
+    const lineOffset = el.offsetTop;
+    const lineChanged = Math.abs(lineOffset - lastScrolledLineOffsetRef.current) > 8;
+
     const containerRect = container.getBoundingClientRect();
     const elRect = el.getBoundingClientRect();
     const relativeTop = elRect.top - containerRect.top;
 
-    // Scroll smoothly only when the active line approaches top/bottom thresholds
+    // 1) Scroll the Pacer inner container smoothly whenever the active line moves outside the 28%..46% sweet spot
     if (
-      relativeTop < container.clientHeight * 0.2 ||
-      relativeTop > container.clientHeight * 0.65
+      lineChanged &&
+      (relativeTop < container.clientHeight * 0.26 ||
+        relativeTop > container.clientHeight * 0.44)
     ) {
+      lastScrolledLineOffsetRef.current = lineOffset;
       const targetScrollTop =
         container.scrollTop + relativeTop - container.clientHeight * 0.35;
       container.scrollTo({
@@ -189,7 +215,24 @@ export function MagicPacerEngine({
         behavior: "smooth",
       });
     }
-  }, [currentIndex]);
+
+    // 2) Also ensure the browser window itself keeps the active word comfortably visible on screen during Audio or Pacer playback
+    if (
+      (isPlaying || externalAudioPlaying) &&
+      typeof window !== "undefined" &&
+      lineChanged
+    ) {
+      const viewportHeight = window.innerHeight;
+      if (elRect.top < 120 || elRect.bottom > viewportHeight - 120) {
+        const targetWindowY =
+          window.scrollY + elRect.top - viewportHeight * 0.38;
+        window.scrollTo({
+          top: Math.max(0, targetWindowY),
+          behavior: "smooth",
+        });
+      }
+    }
+  }, [currentIndex, isPlaying, externalAudioPlaying]);
 
   // Timer loop for Magic Pacer progression + Auto-Ramp (+10 WPM per 400 words or 120s)
   useEffect(() => {

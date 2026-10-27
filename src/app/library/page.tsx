@@ -298,6 +298,53 @@ function LibraryAndReaderContent() {
     user.current_wpm ??
     readerPrefs.defaultWpm;
 
+  const activeStandardWordRef = useRef<HTMLSpanElement | null>(null);
+  const lastStandardLineOffsetRef = useRef<number>(-1);
+
+  const centerActiveWordOnScreen = () => {
+    if (typeof window === "undefined") return;
+    if (readingMode === "standard" && activeStandardWordRef.current) {
+      const rect = activeStandardWordRef.current.getBoundingClientRect();
+      const targetY = window.scrollY + rect.top - window.innerHeight * 0.38;
+      window.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
+    } else {
+      const focused = document.querySelector(".okurlab-pacer-focus");
+      if (focused) {
+        focused.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  };
+
+  // Smoothly auto-scroll the page in Standard (Serbest Okuma) mode during Audio playback
+  useEffect(() => {
+    if (
+      !activeBook ||
+      readingMode !== "standard" ||
+      !isAudioPlaying ||
+      !activeStandardWordRef.current ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    const el = activeStandardWordRef.current;
+    const lineTop = el.offsetTop;
+    const lineChanged = Math.abs(lineTop - lastStandardLineOffsetRef.current) > 8;
+    if (!lineChanged) return;
+
+    const rect = el.getBoundingClientRect();
+    const vh = window.innerHeight;
+    // Keep the spoken sentence comfortably around 32%..52% from the top of the screen
+    if (rect.top < vh * 0.25 || rect.top > vh * 0.52) {
+      lastStandardLineOffsetRef.current = lineTop;
+      const targetWindowY = window.scrollY + rect.top - vh * 0.36;
+      window.scrollTo({
+        top: Math.max(0, targetWindowY),
+        behavior: "smooth",
+      });
+    }
+  }, [currentWordIndex, readingMode, isAudioPlaying, activeBook]);
+
   // Reset free reading baseline when book opens
   useEffect(() => {
     if (activeBook) {
@@ -307,6 +354,7 @@ function LibraryAndReaderContent() {
       setFreeReadingSeconds(0);
       setIsFreeReadingActive(true);
       setSelectionMenu(null);
+      lastStandardLineOffsetRef.current = -1;
     }
   }, [activeBookId]);
 
@@ -1024,6 +1072,7 @@ function LibraryAndReaderContent() {
           autoRampEnabled={readerPrefs.autoRampEnabled}
           zenDimmed={zenDimmed}
           onPlayingStateChange={(playing) => setIsAudioPlaying(playing)}
+          onCenterActiveWord={centerActiveWordOnScreen}
           onWordIndexSync={(wordIdx) => {
             updateReadingProgress(
               activeBook.id,
@@ -1194,12 +1243,19 @@ function LibraryAndReaderContent() {
                           s.length > 10 &&
                           paraPlain.toLowerCase().includes(s.slice(0, 28))
                       );
+                      const isActiveAudioParagraph =
+                        isAudioPlaying &&
+                        paraWords.some(
+                          (t) => t.globalIndex === currentWordIndex
+                        );
 
                       return (
                         <p
                           key={pIdx}
-                          className={`text-foreground transition-colors ${
-                            hasCommunityHighlight
+                          className={`text-foreground transition-all rounded-2xl ${
+                            isActiveAudioParagraph
+                              ? "bg-surface/65 border border-[#B85D3B]/35 p-4 -mx-4 shadow-sm"
+                              : hasCommunityHighlight
                               ? "border-l-2 border-[#B85D3B]/60 pl-3 bg-[#E6D2B5]/25 rounded-r-xl py-1"
                               : ""
                           }`}
@@ -1207,9 +1263,19 @@ function LibraryAndReaderContent() {
                           {paraWords.map((token) => {
                             const isBookmarkedWord =
                               token.globalIndex === currentWordIndex;
+                            const isAudioFocusSpan =
+                              isAudioPlaying &&
+                              token.globalIndex >= currentWordIndex &&
+                              token.globalIndex < currentWordIndex + 3;
+
                             return (
                               <React.Fragment key={token.globalIndex}>
                                 <span
+                                  ref={
+                                    isBookmarkedWord
+                                      ? activeStandardWordRef
+                                      : null
+                                  }
                                   onClick={() => {
                                     const delta = Math.max(
                                       0,
@@ -1258,7 +1324,7 @@ function LibraryAndReaderContent() {
                                     setFreeReadingSeconds(0);
                                   }}
                                   className={`cursor-pointer rounded px-1 py-0.5 transition-colors ${
-                                    isBookmarkedWord
+                                    isBookmarkedWord || isAudioFocusSpan
                                       ? "okurlab-pacer-focus font-medium"
                                       : "hover:bg-surface-elevated"
                                   }`}
@@ -1287,6 +1353,7 @@ function LibraryAndReaderContent() {
                 lineHeight={readerPrefs.lineHeight}
                 autoRampEnabled={readerPrefs.autoRampEnabled}
                 zenDimmed={zenDimmed}
+                externalAudioPlaying={isAudioPlaying}
                 onPlayingStateChange={(playing) => setIsPacerPlaying(playing)}
                 onToggleAutoRamp={() =>
                   updateReaderPrefs({

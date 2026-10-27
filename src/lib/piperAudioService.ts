@@ -58,12 +58,26 @@ export interface ModelDownloadProgress {
 }
 
 /**
- * Converts Ocula WPM (100 - 1000) to HTML5 <audio> playbackRate (0.5x - 3.0x)
+ * Converts Ocula WPM (90 - 600) to HTML5 <audio> playbackRate (0.5x - 3.0x)
  * Formula specified: Math.min(Math.max(wpm / 150, 0.5), 3.0)
  */
 export function wpmToPlaybackRate(wpm: number): number {
   return Number(Math.min(Math.max(wpm / 150, 0.5), 3.0).toFixed(2));
 }
+
+export function playbackRateToWpm(rate: number): number {
+  return Math.round(Math.min(Math.max(rate, 0.5), 3.0) * 150);
+}
+
+export const AUDIO_SPEED_PRESETS = [
+  { label: "0.75x", rate: 0.75, wpm: 115 },
+  { label: "1.0x", rate: 1.0, wpm: 150 },
+  { label: "1.25x", rate: 1.25, wpm: 190 },
+  { label: "1.5x", rate: 1.5, wpm: 225 },
+  { label: "1.75x", rate: 1.75, wpm: 265 },
+  { label: "2.0x", rate: 2.0, wpm: 300 },
+  { label: "2.5x", rate: 2.5, wpm: 375 },
+] as const;
 
 /**
  * Automatically detects whether text is primarily Turkish or English
@@ -366,11 +380,13 @@ export const piperEngine = new PiperAudioEngineManager();
 /**
  * Fallback Web Speech API (window.speechSynthesis) helper
  * Used automatically if WebAssembly is unsupported or while the user chooses instant fallback.
+ * Supports `fromGlobalWordIndex` so live speed changes mid-sentence continue seamlessly from the current word.
  */
 export function speakWithBrowserFallback(options: {
   sentence: SentenceChunk;
   wpm: number;
   lang: "tr-TR" | "en-US";
+  fromGlobalWordIndex?: number;
   onWordChange: (wordIndex: number) => void;
   onEnd: () => void;
   onError: () => void;
@@ -382,7 +398,50 @@ export function speakWithBrowserFallback(options: {
 
   window.speechSynthesis.cancel();
 
-  const utterance = new SpeechSynthesisUtterance(options.sentence.text);
+  // Slice remaining words if resuming mid-sentence after a live speed change
+  const allSpans = options.sentence.words;
+  let startSpanIdx = 0;
+  if (typeof options.fromGlobalWordIndex === "number") {
+    const foundIdx = allSpans.findIndex(
+      (s) => s.globalIndex >= options.fromGlobalWordIndex!
+    );
+    if (foundIdx > 0) {
+      startSpanIdx = foundIdx;
+    }
+  }
+
+  const activeSpans = allSpans.slice(startSpanIdx);
+  const spokenText =
+    activeSpans.length > 0
+      ? activeSpans.map((s) => s.word).join(" ")
+      : options.sentence.text;
+
+  // Re-normalize char ratios for the remaining slice
+  const lengths = activeSpans.map((w) => Math.max(1, w.word.length + 1));
+  const totalChars = Math.max(
+    1,
+    lengths.reduce((acc, l) => acc + l, 0)
+  );
+  let cumulative = 0;
+  const normalizedSpans: SentenceWordSpan[] = activeSpans.map((w, idx) => {
+    const startRatio = cumulative / totalChars;
+    cumulative += lengths[idx];
+    const endRatio = cumulative / totalChars;
+    return {
+      word: w.word,
+      globalIndex: w.globalIndex,
+      charStartRatio: startRatio,
+      charEndRatio: endRatio,
+    };
+  });
+
+  const subSentence: SentenceChunk = {
+    ...options.sentence,
+    text: spokenText,
+    words: normalizedSpans.length > 0 ? normalizedSpans : options.sentence.words,
+  };
+
+  const utterance = new SpeechSynthesisUtterance(spokenText);
   utterance.lang = options.lang;
   // Web Speech API rate is 0.5 - 3.0
   utterance.rate = wpmToPlaybackRate(options.wpm);
@@ -396,30 +455,37 @@ export function speakWithBrowserFallback(options: {
   }
 
   let cancelled = false;
-  const totalChars = Math.max(1, options.sentence.text.length);
+  const subTotalChars = Math.max(1, spokenText.length);
 
   // Estimate duration from WPM so even browsers without boundary events still advance Pacer smoothly
-  const wordCount = Math.max(1, options.sentence.words.length);
+  const wordCount = Math.max(1, subSentence.words.length);
   const estimatedDurationMs = Math.max(
-    600,
-    Math.round((wordCount / Math.max(100, options.wpm)) * 60000)
+    450,
+    Math.round((wordCount / Math.max(90, options.wpm)) * 60000)
   );
   const startTime = Date.now();
+  let lastReportedWord = -1;
 
   const timer = setInterval(() => {
     if (cancelled) return;
     const elapsed = Date.now() - startTime;
     const ratio = Math.min(0.99, elapsed / estimatedDurationMs);
-    const activeWordIdx = getWordIndexAtProgress(options.sentence, ratio);
-    options.onWordChange(activeWordIdx);
-  }, 60);
+    const activeWordIdx = getWordIndexAtProgress(subSentence, ratio);
+    if (activeWordIdx !== lastReportedWord) {
+      lastReportedWord = activeWordIdx;
+      options.onWordChange(activeWordIdx);
+    }
+  }, 55);
 
   utterance.onboundary = (event) => {
     if (cancelled) return;
     if (typeof event.charIndex === "number") {
-      const ratio = Math.min(0.99, event.charIndex / totalChars);
-      const activeWordIdx = getWordIndexAtProgress(options.sentence, ratio);
-      options.onWordChange(activeWordIdx);
+      const ratio = Math.min(0.99, event.charIndex / subTotalChars);
+      const activeWordIdx = getWordIndexAtProgress(subSentence, ratio);
+      if (activeWordIdx !== lastReportedWord) {
+        lastReportedWord = activeWordIdx;
+        options.onWordChange(activeWordIdx);
+      }
     }
   };
 
