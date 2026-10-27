@@ -46,6 +46,8 @@ export interface SavedAccountSnapshot {
 interface OkurLabState {
   theme: ThemeMode;
   isAuthenticated: boolean;
+  /** İlk açılış karşılama okuma ekranı tamamlandı veya atlandı mı. */
+  onboardingDone: boolean;
   user: UserProfile;
   savedAccounts: Record<string, SavedAccountSnapshot>;
   books: Book[];
@@ -69,6 +71,7 @@ interface OkurLabState {
   // Actions
   setTheme: (theme: ThemeMode) => void;
   setLastActiveBookId: (bookId: string) => void;
+  completeOnboarding: () => void;
   setGeminiApiKey: (key: string) => void;
   setSupabaseConfig: (url: string, anonKey: string) => void;
   setLastSyncedAt: (iso: string) => void;
@@ -147,6 +150,7 @@ export const useOkurLabStore = create<OkurLabState>()(
     (set, get) => ({
       theme: "sepia",
       isAuthenticated: true,
+      onboardingDone: false,
       user: { ...INITIAL_USER_PROFILE, auth_provider: "email" },
       savedAccounts: {},
       books: INITIAL_BOOKS.map((b, idx) => ({
@@ -192,6 +196,8 @@ export const useOkurLabStore = create<OkurLabState>()(
       setTheme: (theme) => set({ theme }),
 
       setLastActiveBookId: (lastActiveBookId) => set({ lastActiveBookId }),
+
+      completeOnboarding: () => set({ onboardingDone: true }),
 
       setGeminiApiKey: (geminiApiKey) => set({ geminiApiKey }),
 
@@ -699,10 +705,12 @@ export const useOkurLabStore = create<OkurLabState>()(
     }),
     {
       name: "okurlab-storage-v2",
-      version: 3,
+      version: 4,
       // v3: topluluk verisi sunucuya taşındı; yerel sahte veriyi at, not kimliklerini uuid yap.
-      migrate: (persisted) => {
+      // v4: karşılama ekranı eklendi; daha önce kayıtlı bir durumu olan kişi ilk kez gelen biri değildir.
+      migrate: (persisted, version) => {
         const state = (persisted || {}) as Record<string, unknown>;
+        if (version < 4) state.onboardingDone = true;
         delete state.communityMarginalia;
         delete state.communityReviews;
         delete state.communityQuotes;

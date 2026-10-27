@@ -31,6 +31,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { useOkurLabStore } from "@/store/useOkurLabStore";
+import { FirstVisitReader } from "@/components/onboarding/FirstVisitReader";
 import { parseUploadedBookFile } from "@/lib/fileParser";
 import { Book } from "@/types";
 
@@ -40,7 +41,7 @@ const MODE_LABELS: Record<string, string> = {
   rsvp: "RSVP Odak",
 };
 
-export default function ReadingStudioPage() {
+function ReadingStudio() {
   const router = useRouter();
   const {
     user,
@@ -713,4 +714,21 @@ export default function ReadingStudioPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * İlk kez gelen kişi doğrudan okuma ekranıyla karşılaşır; karşılama bitince ya da
+ * atlanınca (ve sonraki tüm ziyaretlerde) Okuma Stüdyosu açılır. Kalıcı durum yüklenene
+ * kadar boş kâğıt gösterilir; böylece iki ekran arasında titreme olmaz.
+ */
+export default function HomePage() {
+  const onboardingDone = useOkurLabStore((s) => s.onboardingDone);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+  return onboardingDone ? <ReadingStudio /> : <FirstVisitReader />;
 }

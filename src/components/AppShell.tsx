@@ -93,6 +93,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     theme,
     setTheme,
     isAuthenticated,
+    onboardingDone,
     user,
     books,
     readingProgress,
@@ -157,6 +158,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const comprehension = mounted ? user.comprehension_rate : 85;
   const streak = mounted ? user.streak_days : 7;
   const targetPct = Math.min(100, Math.round((currentWpm / 600) * 100));
+
+  // İlk ziyarette ana sayfa yalnızca okuma ekranıdır: kenar çubuğu, alt gezinme ve
+  // paneller yoktur. Kalıcı durum yüklenene kadar da aynı boş kâğıt gösterilir.
+  if (pathname === "/" && (!mounted || !onboardingDone)) {
+    return (
+      <div className="min-h-screen bg-background text-foreground">{children}</div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground">

@@ -8,6 +8,14 @@ const state = () => useOkurLabStore.getState();
 
 beforeEach(reset);
 
+describe("karşılama", () => {
+  it("yeni kullanıcıda tamamlanmamış başlar ve completeOnboarding ile tamamlanır", () => {
+    expect(state().onboardingDone).toBe(false);
+    state().completeOnboarding();
+    expect(state().onboardingDone).toBe(true);
+  });
+});
+
 describe("notlar", () => {
   it("addBookNote uuid kimlikli notu döndürür ve başa ekler", () => {
     const note = state().addBookNote({
@@ -154,8 +162,12 @@ describe("persist migrasyonu (v3)", () => {
   const migrate = (persisted: unknown) =>
     useOkurLabStore.persist.getOptions().migrate!(persisted, 2) as Record<string, unknown>;
 
-  it("sürüm 3'tür", () => {
-    expect(useOkurLabStore.persist.getOptions().version).toBe(3);
+  it("sürüm 4'tür", () => {
+    expect(useOkurLabStore.persist.getOptions().version).toBe(4);
+  });
+
+  it("eski sürümden gelen kişiyi ilk kez gelen biri saymaz", () => {
+    expect(migrate({ theme: "dark" }).onboardingDone).toBe(true);
   });
 
   it("yerel sahte topluluk verisini atar", () => {
