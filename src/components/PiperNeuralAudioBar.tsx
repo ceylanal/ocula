@@ -33,6 +33,15 @@ import {
   wpmToPlaybackRate,
 } from "@/lib/piperAudioService";
 
+/**
+ * Mobil tarayıcılar (özellikle iOS Safari) `audio.play()` çağrısını yalnızca kullanıcı
+ * dokunuşu sırasında senkron başlatılırsa serbest bırakır. Sentez bittikten sonra
+ * (asenkron) yapılan çağrı reddedilir. Dokunuş anında sessiz bir ses çalıp öğeyi
+ * "açarız"; sonraki programatik çalmalar izinli olur.
+ */
+const SILENT_WAV =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=";
+
 interface PiperNeuralAudioBarProps {
   bookId: string;
   bookTitle: string;
@@ -97,6 +106,27 @@ export function PiperNeuralAudioBar({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Ses döngüsü (rAF, audio olayları) eski render'larda oluşturulan kapanışlar içinde çalışır.
+  // Üst bileşenin güncel callback'lerini ref üzerinden çağırmak, bayat WPM/mod değerlerinin
+  // hız ayarını geri sarmasını önler.
+  const callbacksRef = useRef({
+    onPlayingStateChange,
+    onWordIndexSync,
+    onWpmChange,
+    onSessionSave,
+  });
+  callbacksRef.current = {
+    onPlayingStateChange,
+    onWordIndexSync,
+    onWpmChange,
+    onSessionSave,
+  };
+
+  // Her oynatma/durdurma bir sonraki jetona geçer; beklemedeki (sentez, play) işlemler
+  // jeton değiştiyse sonuçlarını yok sayar.
+  const playTokenRef = useRef<number>(0);
+  const [hasStarted, setHasStarted] = useState<boolean>(false);
   const rafRef = useRef<number | null>(null);
   const fallbackCancelRef = useRef<(() => void) | null>(null);
   const fallbackSpeedRestartTimerRef = useRef<
@@ -128,13 +158,13 @@ export function PiperNeuralAudioBar({
     if (wordIdx !== lastSyncedWordIdxRef.current) {
       lastSyncedWordIdxRef.current = wordIdx;
       currentWordIndexRef.current = wordIdx;
-      onWordIndexSync(wordIdx);
+      callbacksRef.current.onWordIndexSync(wordIdx);
     }
   };
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
-    onPlayingStateChange?.(isPlaying);
+    callbacksRef.current.onPlayingStateChange?.(isPlaying);
   }, [isPlaying]);
 
   useEffect(() => {
@@ -203,9 +233,21 @@ export function PiperNeuralAudioBar({
   // Synchronize HTML5 <audio> playbackRate with live OkurLab WPM (and Auto-Ramp)
   const playbackRate = useMemo(() => wpmToPlaybackRate(wpm), [wpm]);
 
+  // Yeni kaynak yüklenince bazı tarayıcılar (Safari/mobil) playbackRate'i varsayılana sıfırlar;
+  // defaultPlaybackRate'i de ayarlayıp oran sapmışsa düzeltiriz.
+  const applyPlaybackRate = (audio: HTMLAudioElement) => {
+    const rate = wpmToPlaybackRate(wpmRef.current);
+    audio.defaultPlaybackRate = rate;
+    if (Math.abs(audio.playbackRate - rate) > 0.01) {
+      audio.playbackRate = rate;
+    }
+    audio.preservesPitch = true;
+  };
+
   useEffect(() => {
     const audio = audioRef.current;
     if (audio) {
+      audio.defaultPlaybackRate = playbackRate;
       audio.playbackRate = playbackRate;
       audio.preservesPitch = true;
       (
@@ -313,7 +355,7 @@ export function PiperNeuralAudioBar({
       const fromWpm = wpmRef.current;
       if (fromWpm < 600) {
         const toWpm = Math.min(600, fromWpm + 10);
-        onWpmChange(toWpm, { from: fromWpm, to: toWpm });
+        callbacksRef.current.onWpmChange(toWpm, { from: fromWpm, to: toWpm });
       }
     }
   };
@@ -329,6 +371,7 @@ export function PiperNeuralAudioBar({
       return;
     }
 
+    const token = ++playTokenRef.current;
     const sentence = sentences[sIdx];
     setActiveSentenceIdx(sIdx);
     activeSentenceIdxRef.current = sIdx;
@@ -401,6 +444,7 @@ export function PiperNeuralAudioBar({
       triggerBackgroundPrefetch(sIdx, selectedVoice);
 
       const { blobUrl, durationSeconds } = await synthesisPromise;
+      if (token !== playTokenRef.current) return;
       setIsSynthesizingFirst(false);
 
       if (!isPlayingRef.current) return;
@@ -409,8 +453,8 @@ export function PiperNeuralAudioBar({
       if (!audio) return;
 
       audio.src = blobUrl;
-      audio.playbackRate = wpmToPlaybackRate(wpmRef.current);
-      audio.preservesPitch = true;
+      audio.onloadedmetadata = () => applyPlaybackRate(audio);
+      applyPlaybackRate(audio);
 
       // Smooth requestAnimationFrame word synchronization loop (deduplicated)
       const updateWordSyncFromAudio = () => {
@@ -427,6 +471,7 @@ export function PiperNeuralAudioBar({
 
       audio.ontimeupdate = () => {
         if (!audio || audio.paused || !isPlayingRef.current) return;
+        applyPlaybackRate(audio);
         const dur =
           audio.duration && isFinite(audio.duration) && audio.duration > 0
             ? audio.duration
@@ -452,9 +497,17 @@ export function PiperNeuralAudioBar({
       };
 
       await audio.play();
+      if (token !== playTokenRef.current) return;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(updateWordSyncFromAudio);
     } catch (err) {
+      // Duraklatma/atlama sırasında yarıda kesilen play() bir hata değildir; motor değiştirilmez.
+      if (
+        token !== playTokenRef.current ||
+        (err instanceof DOMException && err.name === "AbortError")
+      ) {
+        return;
+      }
       console.warn(
         "Piper Neural TTS hatası, yerleşik tarayıcı sesine (Fallback) geçiliyor:",
         err
@@ -472,6 +525,13 @@ export function PiperNeuralAudioBar({
   };
 
   const startAudioPlayback = () => {
+    // Kullanıcı dokunuşu sırasında ses öğesini aç (mobil autoplay politikası)
+    const audio = audioRef.current;
+    if (audio && engineModeRef.current === "piper") {
+      audio.src = SILENT_WAV;
+      audio.play().catch(() => {});
+    }
+    setHasStarted(true);
     const startSIdx = findSentenceIndexForWord(
       sentences,
       currentWordIndexRef.current
@@ -485,6 +545,7 @@ export function PiperNeuralAudioBar({
   };
 
   const stopAudioPlayback = (saveSession = true) => {
+    playTokenRef.current++;
     setIsPlaying(false);
     isPlayingRef.current = false;
     setIsSynthesizingFirst(false);
@@ -523,7 +584,7 @@ export function PiperNeuralAudioBar({
       );
       sessionStartMsRef.current = null;
       if (wordsSpokenInSessionRef.current > 0 || elapsedSec >= 3) {
-        onSessionSave({
+        callbacksRef.current.onSessionSave({
           wordIndex: currentWordIndexRef.current,
           wordsRead: Math.max(5, wordsSpokenInSessionRef.current),
           durationSeconds: elapsedSec,
@@ -552,7 +613,7 @@ export function PiperNeuralAudioBar({
   const handleAdjustWpm = (nextWpm: number) => {
     const clamped = Math.min(600, Math.max(90, Math.round(nextWpm)));
     wpmRef.current = clamped;
-    onWpmChange(clamped);
+    callbacksRef.current.onWpmChange(clamped);
   };
 
   // Wire up Mobile Lock Screen MediaSession Controls (Play / Pause / Next / Prev)
@@ -588,6 +649,7 @@ export function PiperNeuralAudioBar({
     sentences[activeSentenceIdx];
 
   return (
+    <>
     <div
       className={`p-4 rounded-2xl bg-surface border border-border shadow-sm space-y-3.5 transition-opacity duration-500 ${
         zenDimmed && downloadPercent === null
@@ -869,5 +931,77 @@ export function PiperNeuralAudioBar({
         </div>
       )}
     </div>
+
+    {/* Mobil sabit kontrol çubuğu: sayfa otomatik kaydığında ana çubuk görünümden çıkar;
+        durdurma ve hız ayarı her zaman parmak altında kalsın. */}
+    {hasStarted && (
+      <div
+        role="toolbar"
+        aria-label="Sesli okuma kontrolleri"
+        className="md:hidden fixed inset-x-3 z-40 bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] p-2 rounded-2xl bg-surface/95 backdrop-blur-xl border border-border shadow-lg flex items-center gap-1.5"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            if (isPlaying || isSynthesizingFirst) {
+              stopAudioPlayback(true);
+            } else {
+              startAudioPlayback();
+            }
+          }}
+          aria-label={isPlaying || isSynthesizingFirst ? "Sesli okumayı duraklat" : "Sesli okumayı başlat"}
+          className="w-11 h-11 rounded-xl bg-[#B85D3B] text-[#F6F1E7] flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+        >
+          {isPlaying || isSynthesizingFirst ? (
+            <Pause className="w-5 h-5 fill-current" />
+          ) : (
+            <Volume2 className="w-5 h-5" />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleSkipSentence(-1)}
+          aria-label="Önceki cümle"
+          className="w-9 h-11 rounded-xl bg-background border border-border text-muted flex items-center justify-center shrink-0"
+        >
+          <SkipBack className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleSkipSentence(1)}
+          aria-label="Sonraki cümle"
+          className="w-9 h-11 rounded-xl bg-background border border-border text-muted flex items-center justify-center shrink-0"
+        >
+          <SkipForward className="w-4 h-4" />
+        </button>
+
+        <div className="flex-1 flex items-center justify-end gap-1 min-w-0">
+          <button
+            type="button"
+            onClick={() => handleAdjustWpm(wpm - 15)}
+            aria-label="Hızı azalt"
+            className="w-10 h-11 rounded-xl bg-background border border-border text-foreground flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
+          <div className="px-1 text-center tabular-nums leading-tight min-w-[64px]">
+            <div className="text-sm font-bold text-[#B85D3B]">{wpm}</div>
+            <div className="text-[10px] text-muted">
+              WPM • {playbackRate.toFixed(2)}x
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleAdjustWpm(wpm + 15)}
+            aria-label="Hızı artır"
+            className="w-10 h-11 rounded-xl bg-background border border-border text-foreground flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

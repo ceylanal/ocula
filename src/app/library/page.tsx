@@ -137,8 +137,15 @@ function LibraryAndReaderContent() {
   const [zenDimmed, setZenDimmed] = useState<boolean>(false);
   const zenTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Zen solması yalnızca imleçle "uyandırılabilen" cihazlarda uygulanır; dokunmatik
+  // ekranlarda soluk kontrolleri bulmak ve kullanmak imkânsızlaşır.
+  const [canHover, setCanHover] = useState<boolean>(true);
+  useEffect(() => {
+    setCanHover(window.matchMedia("(hover: hover)").matches);
+  }, []);
+
   const isZenEligible = Boolean(
-    activeBookId && (isPacerPlaying || isAudioPlaying)
+    canHover && activeBookId && (isPacerPlaying || isAudioPlaying)
   );
 
   useEffect(() => {
@@ -286,6 +293,21 @@ function LibraryAndReaderContent() {
     }
   };
 
+  // Kullanıcı sayfayı elle kaydırırken otomatik kaydırma onunla yarışmasın: dokunuş/tekerlek
+  // sonrası kısa süre beklenir.
+  const userScrollUntilRef = useRef<number>(0);
+  useEffect(() => {
+    const pause = () => {
+      userScrollUntilRef.current = Date.now() + 4000;
+    };
+    window.addEventListener("touchmove", pause, { passive: true });
+    window.addEventListener("wheel", pause, { passive: true });
+    return () => {
+      window.removeEventListener("touchmove", pause);
+      window.removeEventListener("wheel", pause);
+    };
+  }, []);
+
   // Smoothly auto-scroll the page in Standard (Serbest Okuma) mode during Audio playback
   useEffect(() => {
     if (
@@ -297,6 +319,8 @@ function LibraryAndReaderContent() {
     ) {
       return;
     }
+
+    if (Date.now() < userScrollUntilRef.current) return;
 
     const el = activeStandardWordRef.current;
     const lineTop = el.offsetTop;
@@ -1021,13 +1045,10 @@ function LibraryAndReaderContent() {
           zenDimmed={zenDimmed}
           onPlayingStateChange={(playing) => setIsAudioPlaying(playing)}
           onCenterActiveWord={centerActiveWordOnScreen}
+          // WPM verilmez: sesli okumanın kelime senkronu, kullanıcının az önce ayarladığı hızı
+          // eski bir değerle ezmemeli (updateReadingProgress mevcut hızı korur).
           onWordIndexSync={(wordIdx) => {
-            updateReadingProgress(
-              activeBook.id,
-              wordIdx,
-              readingMode,
-              currentWpm
-            );
+            updateReadingProgress(activeBook.id, wordIdx, readingMode);
           }}
           onWpmChange={(newWpm, rampNotice) => {
             if (rampNotice) setHeaderRampBanner(rampNotice);
