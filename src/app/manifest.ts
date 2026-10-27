@@ -13,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#B85D3B",
     icons: [
       {
-        src: "/ocula-logo.svg",
+        src: "/okurlab-logo.svg",
         sizes: "any",
         type: "image/svg+xml",
         purpose: "any",

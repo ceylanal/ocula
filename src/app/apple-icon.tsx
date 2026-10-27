@@ -18,59 +18,41 @@ export default function AppleIcon() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "#F6F1E7",
-          border: "6px solid #DFD5C3",
-          borderRadius: "40px",
-          color: "#2C2520",
-          fontFamily: "serif",
+          background: "#B85D3B",
+          borderRadius: "42px",
+          color: "#F6F1E7",
         }}
       >
+        {/* Minimalist Floating Focus Dot */}
         <div
           style={{
-            width: "68px",
-            height: "52px",
+            width: "24px",
+            height: "24px",
+            borderRadius: "999px",
+            background: "#F6F1E7",
+            marginBottom: "10px",
+          }}
+        />
+        {/* Clean Open Book Silhouette */}
+        <div
+          style={{
+            width: "96px",
+            height: "54px",
             borderRadius: "14px",
-            background: "#EFE8DA",
-            border: "4px solid #4A5D4E",
+            border: "8px solid #F6F1E7",
+            background: "rgba(246, 241, 231, 0.16)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            marginBottom: "10px",
           }}
         >
           <div
             style={{
-              width: "26px",
-              height: "26px",
-              borderRadius: "999px",
-              background: "#E6D2B5",
-              border: "4px solid #B85D3B",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              width: "6px",
+              height: "100%",
+              background: "#F6F1E7",
             }}
-          >
-            <div
-              style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "999px",
-                background: "#B85D3B",
-              }}
-            />
-          </div>
-        </div>
-        <div
-          style={{
-            fontSize: "30px",
-            fontWeight: 800,
-            letterSpacing: "-0.5px",
-            lineHeight: 1,
-            display: "flex",
-          }}
-        >
-          <span style={{ color: "#2C2520" }}>Okur</span>
-          <span style={{ color: "#B85D3B" }}>Lab</span>
+          />
         </div>
       </div>
     ),

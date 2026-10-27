@@ -48,7 +48,6 @@ export function RsvpEngine({
   initialWpm = 350,
   fontClass = "font-sans",
   autoRampEnabled = false,
-  onToggleAutoRamp,
   onWordIndexChange,
   onSessionSave,
   onFinishSession,
@@ -375,7 +374,7 @@ export function RsvpEngine({
         )}
       </div>
 
-      {/* Main Ocula RSVP Optical HUD Viewport */}
+      {/* Main OkurLab RSVP Optical HUD Viewport */}
       <div className="relative rounded-3xl bg-surface border-2 border-indigo-500/35 overflow-hidden shadow-2xl">
         {/* Top subtle progress bar */}
         <div className="h-1.5 w-full bg-surface-elevated">

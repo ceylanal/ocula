@@ -30,7 +30,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from "recharts";
-import { useSupereadStore } from "@/store/useSupereadStore";
+import { useOkurLabStore } from "@/store/useOkurLabStore";
 import { parseUploadedBookFile } from "@/lib/fileParser";
 import { Book } from "@/types";
 
@@ -57,7 +57,7 @@ export default function ReadingStudioPage() {
     updateReaderPrefs,
     addBook,
     resetDemoData,
-  } = useSupereadStore();
+  } = useOkurLabStore();
 
   const [mounted, setMounted] = useState(false);
   const [isDragging, setIsDragging] = useState(false);

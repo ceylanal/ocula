@@ -28,7 +28,7 @@ import {
   Bar,
 } from "recharts";
 import { SPEED_TEST_ARTICLES } from "@/data/mockData";
-import { useSupereadStore } from "@/store/useSupereadStore";
+import { useOkurLabStore } from "@/store/useOkurLabStore";
 
 type TestPhase = "intro" | "reading" | "quiz" | "result";
 
@@ -43,7 +43,7 @@ export default function SpeedTestPage() {
   const [comprehensionScore, setComprehensionScore] = useState<number>(0);
 
   const startTimeRef = useRef<number | null>(null);
-  const { recordExercise, user, exerciseLogs } = useSupereadStore();
+  const { recordExercise, user, exerciseLogs } = useOkurLabStore();
 
   const chartData = exerciseLogs.slice(-10).map((log, i) => ({
     name: log.label || `#${i + 1}`,

@@ -33,7 +33,7 @@ import {
   Compass,
   KeyRound,
 } from "lucide-react";
-import { useSupereadStore } from "@/store/useSupereadStore";
+import { useOkurLabStore } from "@/store/useOkurLabStore";
 import { Book, BookVisibility, FontFamily, ReadingMode } from "@/types";
 import { parseUploadedBookFile } from "@/lib/fileParser";
 import { tokenizeParagraphs } from "@/lib/textUtils";
@@ -104,7 +104,7 @@ function LibraryAndReaderContent() {
     addCommunityQuotePost,
     markDailyTaskByType,
     recordReadingSession,
-  } = useSupereadStore();
+  } = useOkurLabStore();
 
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
   const [readingMode, setReadingMode] = useState<ReadingMode>("standard");
@@ -438,7 +438,7 @@ function LibraryAndReaderContent() {
 
     const client = getSupabaseClient(supabaseUrl, supabaseAnonKey);
     if (client) {
-      const latest = useSupereadStore.getState();
+      const latest = useOkurLabStore.getState();
       pushStateToSupabase(client, {
         user: latest.user,
         books: latest.books,

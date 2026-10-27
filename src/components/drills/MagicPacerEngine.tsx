@@ -54,7 +54,6 @@ export function MagicPacerEngine({
   zenDimmed = false,
   externalAudioPlaying = false,
   onPlayingStateChange,
-  onToggleAutoRamp,
   onWordIndexChange,
   onSessionSave,
   onFinishSession,

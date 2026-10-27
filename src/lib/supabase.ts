@@ -6,6 +6,8 @@ import {
   UserReadingProgress,
 } from "@/types";
 
+const clientCache = new Map<string, SupabaseClient>();
+
 export function getSupabaseClient(
   customUrl?: string,
   customAnonKey?: string
@@ -21,7 +23,13 @@ export function getSupabaseClient(
     return null;
   }
 
-  return createClient(url, key);
+  const cacheKey = `${url}|${key}`;
+  let client = clientCache.get(cacheKey);
+  if (!client) {
+    client = createClient(url, key);
+    clientCache.set(cacheKey, client);
+  }
+  return client;
 }
 
 export interface SyncPayload {
@@ -31,19 +39,40 @@ export interface SyncPayload {
   readingProgress: Record<string, UserReadingProgress>;
 }
 
+const NO_SESSION_MESSAGE =
+  "Bulut eşitlemesi için Supabase hesabıyla giriş yapılmış olmalıdır. Veriler yalnızca bu cihazda saklanıyor.";
+
+async function getSessionUserId(client: SupabaseClient): Promise<string | null> {
+  const { data } = await client.auth.getSession();
+  return data.session?.user.id ?? null;
+}
+
 /**
- * Pushes local KitUp state (User stats, Custom PDF/EPUB Books, Exercise Logs, Reading Progress)
- * to Supabase PostgreSQL tables so the user can seamlessly continue on their phone.
+ * Log ve ilerleme kayıtlarının kimlikleri tabloda global birincil anahtardır;
+ * farklı kullanıcıların aynı yerel kimliği (ör. "prog-book-1") çakıştırmaması için
+ * kullanıcı kimliğiyle önek alırlar.
+ */
+function scopeId(userId: string, id: string): string {
+  return id.startsWith(`${userId}:`) ? id : `${userId}:${id}`;
+}
+
+/**
+ * Pushes local OkurLab state (user stats, custom books, exercise logs, reading progress)
+ * to Supabase. Requires an authenticated Supabase session: row-level security only
+ * admits rows owned by `auth.uid()`. Bundled demo books are not uploaded.
  */
 export async function pushStateToSupabase(
   client: SupabaseClient,
   payload: SyncPayload
 ): Promise<{ ok: boolean; message: string }> {
   try {
+    const uid = await getSessionUserId(client);
+    if (!uid) return { ok: false, message: NO_SESSION_MESSAGE };
+
     // 1. Upsert user profile
     const { error: userErr } = await client.from("users").upsert(
       {
-        id: payload.user.id,
+        id: uid,
         email: payload.user.email,
         name: payload.user.name,
         current_wpm: payload.user.current_wpm,
@@ -55,20 +84,26 @@ export async function pushStateToSupabase(
     );
     if (userErr) throw userErr;
 
-    // 2. Upsert books (including custom uploaded PDF/EPUB books)
-    const booksToUpsert = payload.books.map((b) => ({
-      id: b.id,
-      title: b.title,
-      author: b.author,
-      category: b.category,
-      difficulty_level: b.difficulty_level,
-      word_count: b.word_count,
-      cover_gradient: b.cover_gradient,
-      summary: b.summary,
-      content: b.content,
-      questions: b.questions || [],
-      is_custom: Boolean(b.is_custom),
-    }));
+    // 2. Upsert user-uploaded books
+    const booksToUpsert = payload.books
+      .filter((b) => b.is_custom)
+      .map((b) => ({
+        id: b.id,
+        title: b.title,
+        author: b.author,
+        category: b.category,
+        difficulty_level: b.difficulty_level,
+        word_count: b.word_count,
+        cover_gradient: b.cover_gradient,
+        summary: b.summary,
+        content: b.content,
+        questions: b.questions || [],
+        is_custom: true,
+        owner_id: uid,
+        owner_name: b.owner_name || payload.user.name,
+        visibility: b.visibility || "private",
+        share_code: b.share_code || null,
+      }));
 
     if (booksToUpsert.length > 0) {
       const { error: bookErr } = await client
@@ -80,8 +115,8 @@ export async function pushStateToSupabase(
     // 3. Upsert exercise logs
     if (payload.exerciseLogs.length > 0) {
       const logsToUpsert = payload.exerciseLogs.map((l) => ({
-        id: l.id,
-        user_id: l.user_id,
+        id: scopeId(uid, l.id),
+        user_id: uid,
         exercise_type: l.exercise_type,
         achieved_wpm: l.achieved_wpm,
         accuracy_score: l.accuracy_score,
@@ -99,8 +134,8 @@ export async function pushStateToSupabase(
     const progressValues = Object.values(payload.readingProgress);
     if (progressValues.length > 0) {
       const progToUpsert = progressValues.map((p) => ({
-        id: p.id,
-        user_id: p.user_id,
+        id: scopeId(uid, p.id),
+        user_id: uid,
         book_id: p.book_id,
         current_word_index: p.current_word_index,
         reading_mode: p.reading_mode,
@@ -116,46 +151,55 @@ export async function pushStateToSupabase(
     return {
       ok: true,
       message:
-        "Tüm verileriniz (WPM skorları, yüklenen PDF/EPUB kitaplar ve okuma konumları) Supabase bulutuna eşitlendi!",
+        "WPM skorlarınız, yüklediğiniz kitaplar ve okuma konumlarınız Supabase bulutuna eşitlendi.",
     };
   } catch (err: unknown) {
     const errMsg =
-      err instanceof Error ? err.message : "Bilinmeyen Supabase hatası";
+      err instanceof Error
+        ? err.message
+        : (err as { message?: string } | null)?.message ||
+          "Bilinmeyen Supabase hatası";
     return {
       ok: false,
-      message: `Supabase eşitleme hatası: ${errMsg}. (Tabloları oluşturmak için SQL şemasını çalıştırdığınızdan emin olun.)`,
+      message: `Supabase eşitleme hatası: ${errMsg}. (supabase/schema.sql dosyasını çalıştırdığınızdan emin olun.)`,
     };
   }
 }
 
 /**
- * Pulls latest KitUp state from Supabase so phone & desktop stay in sync.
+ * Pulls the signed-in user's cloud state so phone & desktop stay in sync.
  */
 export async function pullStateFromSupabase(
   client: SupabaseClient,
-  userId: string
+  fallbackUserId?: string
 ): Promise<{
   ok: boolean;
   message: string;
   data?: Partial<SyncPayload>;
 }> {
   try {
+    const uid = (await getSessionUserId(client)) || fallbackUserId || null;
+    if (!uid) return { ok: false, message: NO_SESSION_MESSAGE };
+
     const [userRes, booksRes, logsRes, progRes] = await Promise.all([
-      client.from("users").select("*").eq("id", userId).maybeSingle(),
+      client.from("users").select("*").eq("id", uid).maybeSingle(),
       client
         .from("books")
         .select("*")
+        .eq("owner_id", uid)
         .order("created_at", { ascending: false }),
       client
         .from("exercise_logs")
         .select("*")
-        .eq("user_id", userId)
+        .eq("user_id", uid)
         .order("completed_at", { ascending: true }),
-      client.from("user_reading_progress").select("*").eq("user_id", userId),
+      client.from("user_reading_progress").select("*").eq("user_id", uid),
     ]);
 
     if (userRes.error) throw userRes.error;
     if (booksRes.error) throw booksRes.error;
+    if (logsRes.error) throw logsRes.error;
+    if (progRes.error) throw progRes.error;
 
     const progressMap: Record<string, UserReadingProgress> = {};
     (progRes.data || []).forEach((row) => {
@@ -172,7 +216,7 @@ export async function pullStateFromSupabase(
 
     return {
       ok: true,
-      message: "Buluttaki güncel kitaplar ve okuma ilerlemeniz telefona/cihaza indirildi!",
+      message: "Buluttaki güncel kitaplarınız ve okuma ilerlemeniz bu cihaza indirildi.",
       data: {
         user: userRes.data || undefined,
         books:
@@ -189,7 +233,10 @@ export async function pullStateFromSupabase(
     };
   } catch (err: unknown) {
     const errMsg =
-      err instanceof Error ? err.message : "Bilinmeyen Supabase hatası";
+      err instanceof Error
+        ? err.message
+        : (err as { message?: string } | null)?.message ||
+          "Bilinmeyen Supabase hatası";
     return {
       ok: false,
       message: `Buluttan veri çekilemedi: ${errMsg}`,

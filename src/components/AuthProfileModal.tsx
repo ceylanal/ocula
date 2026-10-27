@@ -10,18 +10,17 @@ import {
   Cloud,
   CheckCircle2,
   RefreshCw,
-  BookOpen,
   Sparkles,
   X,
   UserPlus,
 } from "lucide-react";
-import { useSupereadStore } from "@/store/useSupereadStore";
+import { useOkurLabStore } from "@/store/useOkurLabStore";
 import {
   getSupabaseClient,
   pullStateFromSupabase,
   pushStateToSupabase,
 } from "@/lib/supabase";
-import { OculaLogo } from "./OculaLogo";
+import { OkurLabLogo } from "./OkurLabLogo";
 
 interface AuthProfileModalProps {
   open: boolean;
@@ -54,7 +53,6 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
     isAuthenticated,
     user,
     books,
-    exerciseLogs,
     readingProgress,
     supabaseUrl,
     supabaseAnonKey,
@@ -63,7 +61,7 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
     logoutAccount,
     applyCloudState,
     setLastSyncedAt,
-  } = useSupereadStore();
+  } = useOkurLabStore();
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [nameInput, setNameInput] = useState(user.name);
@@ -78,7 +76,6 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
   if (!open) return null;
 
   const syncAccountWithSupabase = async (
-    targetUserId: string,
     direction: "both" | "push" | "pull" = "both"
   ) => {
     const client = getSupabaseClient(supabaseUrl, supabaseAnonKey);
@@ -94,29 +91,30 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
     setLoading(true);
     try {
       if (direction === "pull" || direction === "both") {
-        const pullRes = await pullStateFromSupabase(client, targetUserId);
-        if (pullRes.ok && pullRes.data) {
-          applyCloudState(pullRes.data);
+        const pullRes = await pullStateFromSupabase(client);
+        if (!pullRes.ok) {
+          setSyncStatus({ ok: false, text: pullRes.message });
+          return;
         }
+        if (pullRes.data) applyCloudState(pullRes.data);
       }
       if (direction === "push" || direction === "both") {
-        const latest = useSupereadStore.getState();
-        await pushStateToSupabase(client, {
+        const latest = useOkurLabStore.getState();
+        const pushRes = await pushStateToSupabase(client, {
           user: latest.user,
           books: latest.books,
           exerciseLogs: latest.exerciseLogs,
           readingProgress: latest.readingProgress,
         });
+        if (!pushRes.ok) {
+          setSyncStatus({ ok: false, text: pushRes.message });
+          return;
+        }
       }
       setLastSyncedAt(new Date().toISOString());
       setSyncStatus({
         ok: true,
-        text: "Supabase Auth & Bulut Senkronizasyonu tamamlandı! Kitaplarınız, kaldığınız kelime indeksi ve WPM istatistikleriniz eşitlendi.",
-      });
-    } catch {
-      setSyncStatus({
-        ok: true,
-        text: "Yerel çoklu hesap senkronizasyonu aktif. Tüm kitap ve WPM verileriniz kaydedildi.",
+        text: "Bulut senkronizasyonu tamamlandı. Kitaplarınız, kaldığınız kelime indeksi ve WPM istatistikleriniz eşitlendi.",
       });
     } finally {
       setLoading(false);
@@ -136,25 +134,25 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
 
     const client = getSupabaseClient(supabaseUrl, supabaseAnonKey);
     let authUserId: string | undefined;
+    let authError: string | undefined;
 
     if (client && passwordInput.trim().length >= 6) {
       try {
-        if (mode === "register") {
-          const { data } = await client.auth.signUp({
-            email: cleanEmail,
-            password: passwordInput,
-            options: { data: { full_name: cleanName } },
-          });
-          authUserId = data.user?.id;
-        } else {
-          const { data } = await client.auth.signInWithPassword({
-            email: cleanEmail,
-            password: passwordInput,
-          });
-          authUserId = data.user?.id;
-        }
-      } catch {
-        // Fallback to seamless local+cloud profile sync
+        const { data, error } =
+          mode === "register"
+            ? await client.auth.signUp({
+                email: cleanEmail,
+                password: passwordInput,
+                options: { data: { full_name: cleanName } },
+              })
+            : await client.auth.signInWithPassword({
+                email: cleanEmail,
+                password: passwordInput,
+              });
+        authUserId = data.user?.id;
+        authError = error?.message;
+      } catch (err) {
+        authError = err instanceof Error ? err.message : "Bağlantı hatası";
       }
     }
 
@@ -165,8 +163,16 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
       provider: "email",
     });
 
-    const latestUser = useSupereadStore.getState().user;
-    await syncAccountWithSupabase(latestUser.id, "both");
+    if (authError) {
+      setSyncStatus({
+        ok: false,
+        text: `Supabase oturumu açılamadı: ${authError}. Yerel profille devam ediliyor; bulut eşitlemesi yapılmadı.`,
+      });
+      setLoading(false);
+      return;
+    }
+
+    await syncAccountWithSupabase("both");
     setLoading(false);
   };
 
@@ -197,8 +203,7 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
       email: googleEmail,
       provider: "google",
     });
-    const latestUser = useSupereadStore.getState().user;
-    await syncAccountWithSupabase(latestUser.id, "both");
+    await syncAccountWithSupabase("both");
     setLoading(false);
   };
 
@@ -209,7 +214,7 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
       <div className="w-full max-w-lg rounded-3xl bg-surface border-2 border-border shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="p-5 border-b border-border flex items-center justify-between bg-surface-elevated/60">
-          <OculaLogo
+          <OkurLabLogo
             size="sm"
             subtitle="Supabase Auth • Çoklu Hesap & Bulut Senkronizasyonu"
           />
@@ -305,7 +310,7 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
               <button
                 type="button"
                 disabled={loading}
-                onClick={() => syncAccountWithSupabase(user.id, "both")}
+                onClick={() => syncAccountWithSupabase("both")}
                 className="font-bold text-[#B85D3B] hover:underline flex items-center gap-1"
               >
                 <RefreshCw
@@ -447,14 +452,13 @@ export function AuthProfileModal({ open, onClose }: AuthProfileModalProps) {
                   <button
                     key={acc.email}
                     type="button"
-                    onClick={async () => {
+                    onClick={() => {
+                      // Demo hesaplar yereldir; mevcut Supabase oturumuna bağlanmamalıdır.
                       loginOrSwitchAccount({
                         name: acc.name,
                         email: acc.email,
                         provider: "email",
                       });
-                      const latest = useSupereadStore.getState().user;
-                      await syncAccountWithSupabase(latest.id, "both");
                     }}
                     className={`p-2.5 rounded-xl border text-left transition-all ${
                       isCurrent

@@ -12,65 +12,15 @@ import {
   X,
   Database,
 } from "lucide-react";
-import { useSupereadStore } from "@/store/useSupereadStore";
+import { useOkurLabStore } from "@/store/useOkurLabStore";
 import {
   getSupabaseClient,
   pullStateFromSupabase,
   pushStateToSupabase,
 } from "@/lib/supabase";
-import { OculaLogo } from "./OculaLogo";
+import { OkurLabLogo } from "./OkurLabLogo";
 
-const SUPABASE_SQL_SNIPPET = `create table if not exists public.users (
-  id text primary key,
-  email text not null,
-  name text,
-  current_wpm integer default 220,
-  baseline_wpm integer default 215,
-  comprehension_rate integer default 75,
-  streak_days integer default 1,
-  created_at timestamptz default now()
-);
-create table if not exists public.books (
-  id text primary key,
-  title text not null,
-  author text not null,
-  category text not null,
-  difficulty_level text not null,
-  word_count integer not null,
-  cover_gradient text default 'from-indigo-600 via-violet-600 to-purple-700',
-  summary text default '',
-  content jsonb not null,
-  questions jsonb default '[]'::jsonb,
-  is_custom boolean default true,
-  created_at timestamptz default now()
-);
-create table if not exists public.exercise_logs (
-  id text primary key,
-  user_id text not null,
-  exercise_type text not null,
-  achieved_wpm integer not null,
-  accuracy_score integer not null,
-  duration_seconds integer not null,
-  label text,
-  completed_at timestamptz default now()
-);
-create table if not exists public.user_reading_progress (
-  id text primary key,
-  user_id text not null,
-  book_id text not null,
-  current_word_index integer default 0,
-  reading_mode text default 'standard',
-  preferred_wpm integer default 320,
-  updated_at timestamptz default now()
-);
-alter table public.users enable row level security;
-alter table public.books enable row level security;
-alter table public.exercise_logs enable row level security;
-alter table public.user_reading_progress enable row level security;
-create policy "Public access users" on public.users for all using (true) with check (true);
-create policy "Public access books" on public.books for all using (true) with check (true);
-create policy "Public access logs" on public.exercise_logs for all using (true) with check (true);
-create policy "Public access progress" on public.user_reading_progress for all using (true) with check (true);`;
+import SUPABASE_SQL_SNIPPET from "../../supabase/schema.sql";
 
 interface CloudSyncAndShareModalProps {
   open: boolean;
@@ -92,7 +42,7 @@ export function CloudSyncAndShareModal({
     setSupabaseConfig,
     setLastSyncedAt,
     applyCloudState,
-  } = useSupereadStore();
+  } = useOkurLabStore();
 
   const [tab, setTab] = useState<"mobile" | "supabase">("mobile");
   const [urlInput, setUrlInput] = useState(
@@ -114,7 +64,7 @@ export function CloudSyncAndShareModal({
   const shareUrl =
     typeof window !== "undefined"
       ? window.location.origin
-      : "https://ocula.vercel.app";
+      : "https://ocula-read.vercel.app";
 
   const shareText = `📖 OkurLab ile sıcak sepya kağıt üzerinde okuma hızımı ${user.current_wpm} WPM (%${user.comprehension_rate} anlama oranı) seviyesine çıkardım! Sen de dene:`;
 
@@ -185,7 +135,7 @@ export function CloudSyncAndShareModal({
 
     setSyncing(true);
     setStatusMsg(null);
-    const res = await pullStateFromSupabase(client, user.id);
+    const res = await pullStateFromSupabase(client);
     if (res.ok && res.data) {
       applyCloudState(res.data);
     }
@@ -198,7 +148,7 @@ export function CloudSyncAndShareModal({
       <div className="w-full max-w-xl rounded-3xl bg-surface border-2 border-border shadow-2xl overflow-hidden">
         {/* Modal Header */}
         <div className="p-5 border-b border-border flex items-center justify-between bg-surface-elevated/50">
-          <OculaLogo
+          <OkurLabLogo
             size="sm"
             subtitle="Mobil Kurulum, Paylaşım & Supabase Bulut"
           />
@@ -251,7 +201,7 @@ export function CloudSyncAndShareModal({
                       {user.current_wpm} WPM • %{user.comprehension_rate} Anlama
                     </div>
                   </div>
-                  <OculaLogo size="md" showText={false} />
+                  <OkurLabLogo size="md" showText={false} />
                 </div>
 
                 <p className="text-xs text-muted leading-relaxed bg-surface/80 p-3 rounded-xl border border-border">

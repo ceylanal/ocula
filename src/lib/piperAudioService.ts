@@ -58,7 +58,7 @@ export interface ModelDownloadProgress {
 }
 
 /**
- * Converts Ocula WPM (90 - 600) to HTML5 <audio> playbackRate (0.5x - 3.0x)
+ * Converts OkurLab WPM (90 - 600) to HTML5 <audio> playbackRate (0.5x - 3.0x)
  * Formula specified: Math.min(Math.max(wpm / 150, 0.5), 3.0)
  */
 export function wpmToPlaybackRate(wpm: number): number {
@@ -231,7 +231,7 @@ export async function isVoiceModelCached(
 
   try {
     if (typeof caches !== "undefined") {
-      const cache = await caches.open("ocula-piper-models-v1");
+      const cache = await caches.open("ocula-piper-models-v1") /* eski ad: mevcut model önbelleğini korumak için değiştirilmedi */;
       const keys = await cache.keys();
       if (keys.some((req) => req.url.endsWith(fileName))) {
         return true;

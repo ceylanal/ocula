@@ -17,7 +17,7 @@ import {
   Plus,
   Compass,
 } from "lucide-react";
-import { useSupereadStore } from "@/store/useSupereadStore";
+import { useOkurLabStore } from "@/store/useOkurLabStore";
 
 export default function CommunityOkurSalonuPage() {
   const {
@@ -33,7 +33,7 @@ export default function CommunityOkurSalonuPage() {
     addCommunityQuotePost,
     toggleQuoteLike,
     addQuoteComment,
-  } = useSupereadStore();
+  } = useOkurLabStore();
 
   const [activeFilter, setActiveFilter] = useState<
     "all" | "reviews" | "quotes"

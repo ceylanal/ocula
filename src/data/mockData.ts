@@ -10,7 +10,7 @@ import { countWordsInParagraphs } from "@/lib/textUtils";
 export const INITIAL_USER_PROFILE: UserProfile = {
   id: "user-1",
   name: "Ceylan Al",
-  email: "ceylan@superead.app",
+  email: "ceylan@okurlab.app",
   current_wpm: 340,
   baseline_wpm: 215,
   comprehension_rate: 85,

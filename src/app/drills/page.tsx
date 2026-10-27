@@ -11,7 +11,7 @@ import {
   Check,
 } from "lucide-react";
 import { DRILL_SAMPLE_TEXTS } from "@/data/mockData";
-import { useSupereadStore } from "@/store/useSupereadStore";
+import { useOkurLabStore } from "@/store/useOkurLabStore";
 import { RsvpEngine } from "@/components/drills/RsvpEngine";
 import { MagicPacerEngine } from "@/components/drills/MagicPacerEngine";
 import { SchulteTableDrill } from "@/components/drills/SchulteTableDrill";
@@ -34,7 +34,7 @@ function DrillsContent() {
     null
   );
 
-  const { recordExercise, user } = useSupereadStore();
+  const { recordExercise, user } = useOkurLabStore();
 
   useEffect(() => {
     const tabParam = searchParams.get("tab") as DrillTab;

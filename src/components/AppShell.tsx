@@ -13,15 +13,14 @@ import {
   BookMarked,
   Flame,
   Cloud,
-  Share2,
   Sparkles,
   Settings,
   Users,
   User,
 } from "lucide-react";
-import { useSupereadStore } from "@/store/useSupereadStore";
+import { useOkurLabStore } from "@/store/useOkurLabStore";
 import { ThemeMode } from "@/types";
-import { OculaLogo } from "./OculaLogo";
+import { OkurLabLogo } from "./OkurLabLogo";
 import { CloudSyncAndShareModal } from "./CloudSyncAndShareModal";
 import { AuthProfileModal } from "./AuthProfileModal";
 import { getSupabaseClient, pushStateToSupabase } from "@/lib/supabase";
@@ -99,7 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     supabaseAnonKey,
     readerPrefs,
     updateReaderPrefs,
-  } = useSupereadStore();
+  } = useOkurLabStore();
   const [mounted, setMounted] = useState(false);
   const [cloudModalOpen, setCloudModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -153,7 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Brand Header with Minimalist OkurLab Logo */}
         <div className="px-6 py-5 flex items-center justify-between border-b border-border/80">
           <Link href="/">
-            <OculaLogo
+            <OkurLabLogo
               size="md"
               subtitle="Sıcak Sepya Kitap & Okuma Laboratuvarı"
             />
@@ -305,7 +304,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile Top Bar */}
       <header className="zen-chrome md:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-surface/95 backdrop-blur-xl border-b border-border transition-opacity duration-500">
         <Link href="/">
-          <OculaLogo size="sm" />
+          <OkurLabLogo size="sm" />
         </Link>
 
         <div className="flex items-center gap-1.5">

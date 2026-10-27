@@ -10,7 +10,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Book, ComprehensionQuestion } from "@/types";
-import { useSupereadStore } from "@/store/useSupereadStore";
+import { useOkurLabStore } from "@/store/useOkurLabStore";
 
 interface BookComprehensionQuizProps {
   book: Book;
@@ -26,7 +26,7 @@ export function BookComprehensionQuiz({
     recordExercise,
     geminiApiKey,
     setGeminiApiKey,
-  } = useSupereadStore();
+  } = useOkurLabStore();
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationSource, setGenerationSource] = useState<string | null>(null);
