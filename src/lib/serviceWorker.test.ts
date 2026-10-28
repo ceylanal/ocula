@@ -42,9 +42,11 @@ type Handler = (event: Record<string, unknown>) => void;
 function makeCaches() {
   const stores = new Map<string, Map<string, FakeResponse>>();
   const failAdd = new Set<string>();
+  const flags = { failPut: false, failMatch: false };
   const api = {
     stores,
     failAdd,
+    flags,
     async open(name: string) {
       if (!stores.has(name)) stores.set(name, new Map());
       const store = stores.get(name)!;
@@ -54,6 +56,7 @@ function makeCaches() {
           store.set(ORIGIN + url, response(ORIGIN + url));
         },
         async put(request: FakeRequest, res: FakeResponse) {
+          if (flags.failPut) throw new DOMException("kota dolu", "QuotaExceededError");
           store.set(request.url, res);
         },
       };
@@ -65,6 +68,7 @@ function makeCaches() {
       return stores.delete(name);
     },
     async match(request: FakeRequest | string) {
+      if (flags.failMatch) throw new Error("depolama erişilemiyor");
       const url = typeof request === "string" ? ORIGIN + request : request.url;
       for (const store of Array.from(stores.values())) {
         if (store.has(url)) return store.get(url);
@@ -246,6 +250,42 @@ describe("fetch", () => {
       throw new TypeError("Failed to fetch");
     };
     const res = await dispatch(req("/community?_rsc=zzz"));
+    expect(res).toBeInstanceOf(Error);
+  });
+
+  it("önbellek yazımı başarısız olsa bile ağdan gelen sayfa teslim edilir (kota, gizli sekme)", async () => {
+    sw.caches.flags.failPut = true;
+    const res = (await dispatch(req("/library", { mode: "navigate" }))) as FakeResponse;
+    expect(res).not.toBeInstanceOf(Error);
+    expect(res.url).toBe(ORIGIN + "/library");
+  });
+
+  it("önbellek yazımı başarısız olsa bile statik dosya ve CDN yanıtı teslim edilir", async () => {
+    sw.caches.flags.failPut = true;
+    const chunk = (await dispatch(req("/_next/static/chunks/a.js"))) as FakeResponse;
+    expect(chunk.url).toBe(ORIGIN + "/_next/static/chunks/a.js");
+    const wasm = (await dispatch(req("https://cdn.jsdelivr.net/npm/x/ort.wasm"))) as FakeResponse;
+    expect(wasm.url).toBe("https://cdn.jsdelivr.net/npm/x/ort.wasm");
+  });
+
+  it("önbellek yazımı başarısızsa 'eski göster, yenile' ilk istekte de yanıt verir", async () => {
+    sw.caches.flags.failPut = true;
+    const res = (await dispatch(req("/piper/piper-worker.mjs"))) as FakeResponse;
+    expect(res.url).toBe(ORIGIN + "/piper/piper-worker.mjs");
+  });
+
+  it("önbellek okunamıyorsa ağdan devam eder", async () => {
+    sw.caches.flags.failMatch = true;
+    const res = (await dispatch(req("/_next/static/chunks/b.js"))) as FakeResponse;
+    expect(res.url).toBe(ORIGIN + "/_next/static/chunks/b.js");
+  });
+
+  it("ağ yokken ve önbellek okunamıyorsa sayfa isteği hata ile biter (çökme yok)", async () => {
+    sw.caches.flags.failMatch = true;
+    sw.state.fetchImpl = async () => {
+      throw new TypeError("Failed to fetch");
+    };
+    const res = await dispatch(req("/library", { mode: "navigate" }));
     expect(res).toBeInstanceOf(Error);
   });
 

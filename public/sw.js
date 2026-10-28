@@ -67,42 +67,65 @@ function classify(request, origin) {
   return "page";
 }
 
-async function putIfOk(cacheName, request, response) {
-  if (response && response.ok && response.type !== "opaque") {
-    const cache = await caches.open(cacheName);
-    await cache.put(request, response.clone());
-  }
-  return response;
+/**
+ * Başarılı bir ağ yanıtını önbelleğe arka planda yazar. Önbellek yazımı (kota dolu, iOS gizli
+ * sekme, depolama kapalı) başarısız olsa bile sayfaya giden yanıt ASLA etkilenmez:
+ * önbellek yalnızca hızlandırıcıdır, yanıtın kaynağı değildir.
+ */
+function cacheInBackground(event, cacheName, request, response) {
+  if (!response || !response.ok || response.type === "opaque") return;
+  const copy = response.clone();
+  event.waitUntil(
+    caches
+      .open(cacheName)
+      .then((cache) => cache.put(request, copy))
+      .catch(() => undefined)
+  );
 }
 
-async function networkFirstPage(request) {
+/** Önbellek okuması hata verirse (depolama erişilemez) "bulunamadı" sayılır. */
+async function safeMatch(request, options) {
   try {
-    const response = await fetch(request);
-    await putIfOk(PAGE_CACHE, request, response);
-    return response;
+    return await caches.match(request, options);
+  } catch {
+    return undefined;
+  }
+}
+
+async function networkFirstPage(request, event) {
+  let response;
+  try {
+    response = await fetch(request);
   } catch (err) {
-    const cached = await caches.match(request, { ignoreVary: true });
+    const cached = await safeMatch(request, { ignoreVary: true });
     if (cached) return cached;
     if (request.mode === "navigate") {
-      const offline = await caches.match(OFFLINE_URL);
+      const offline = await safeMatch(OFFLINE_URL);
       if (offline) return offline;
     }
     throw err;
   }
+  cacheInBackground(event, PAGE_CACHE, request, response);
+  return response;
 }
 
-async function cacheFirst(cacheName, request) {
-  const cached = await caches.match(request);
+async function cacheFirst(cacheName, request, event) {
+  const cached = await safeMatch(request);
   if (cached) return cached;
   const response = await fetch(request);
-  return putIfOk(cacheName, request, response);
+  cacheInBackground(event, cacheName, request, response);
+  return response;
 }
 
 async function staleWhileRevalidate(cacheName, request, event) {
-  const cached = await caches.match(request);
-  const refresh = fetch(request)
-    .then((response) => putIfOk(cacheName, request, response))
-    .catch(() => undefined);
+  const cached = await safeMatch(request);
+  const refresh = fetch(request).then(
+    (response) => {
+      cacheInBackground(event, cacheName, request, response);
+      return response;
+    },
+    () => undefined
+  );
   if (cached) {
     event.waitUntil(refresh);
     return cached;
@@ -146,11 +169,11 @@ self.addEventListener("fetch", (event) => {
   if (strategy === "bypass") return;
 
   if (strategy === "page") {
-    event.respondWith(networkFirstPage(event.request));
+    event.respondWith(networkFirstPage(event.request, event));
   } else if (strategy === "static") {
-    event.respondWith(cacheFirst(STATIC_CACHE, event.request));
+    event.respondWith(cacheFirst(STATIC_CACHE, event.request, event));
   } else if (strategy === "cdn") {
-    event.respondWith(cacheFirst(CDN_CACHE, event.request));
+    event.respondWith(cacheFirst(CDN_CACHE, event.request, event));
   } else {
     event.respondWith(staleWhileRevalidate(ASSET_CACHE, event.request, event));
   }
